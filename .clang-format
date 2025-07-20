@@ -1,0 +1,174 @@
+# Based on Google C++ Style Guide with medical device specific adaptations
+# https://google.github.io/styleguide/cppguide.html
+
+# Base style
+BasedOnStyle: Google
+
+# Language settings
+Language: Cpp
+Standard: c++23
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentCaseLabels: true
+IndentPPDirectives: BeforeHash
+IndentRequiresClause: true
+RequiresClausePosition: OwnLine
+
+# Line length and breaking
+ColumnLimit: 200
+
+# Braces
+BreakBeforeBraces: Attach
+Cpp11BracedListStyle: true
+
+# Spacing
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: false
+SpacesInContainerLiterals: true
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: Right
+AlignConsecutiveAssignments: None
+AlignConsecutiveBitFields: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Breaking
+AllowAllArgumentsOnNextLine: true
+AllowAllConstructorInitializersOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortLambdasOnASingleLine: All
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: true
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: true
+BinPackParameters: true
+
+# Line breaking
+BreakAfterJavaFieldAnnotations: false
+BreakBeforeBinaryOperators: None
+BreakBeforeConceptDeclarations: true
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+BreakStringLiterals: true
+
+# Constructor initializers
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 4
+
+# Continuation and wrapping
+ContinuationIndentWidth: 4
+
+# Empty lines
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+
+# Includes
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive
+SortUsingDeclarations: true
+
+# Include categories for medical device project structure
+IncludeCategories:
+  # 1. The header file corresponding to the current source file (.h/.hpp)
+  - Regex: '^"(.*[/\\])?([A-Za-z0-9_]+)\.(h|hpp)"$'
+    Priority: 1
+    SortPriority: 0
+  # 2. Other headers from the same project (src/ or include/)
+  - Regex: '^"(src|include)/.*\.(h|hpp)"$'
+    Priority: 2
+    SortPriority: 0
+  # 3. Headers from other non-standard, non-system libraries (e.g., Qt, Eigen)
+  - Regex: '^<((Qt|Eigen|catch2|trompeloeil|spdlog|PCL|vtk)[^>]*)>$'
+    Priority: 3
+    SortPriority: 0
+  # 4. Standard C++ headers
+  - Regex: '^<([a-zA-Z_][a-zA-Z0-9_]*\.h\+\+|[a-zA-Z_][a-zA-Z0-9_]*|c[a-z]+)>$'
+    Priority: 4
+    SortPriority: 0
+  # 5. Standard C headers
+  - Regex: '^<([a-zA-Z_][a-zA-Z0-9_]*\.h)>$'
+    Priority: 5
+    SortPriority: 0
+
+# Penalties (for line breaking decisions)
+PenaltyBreakAssignment: 2
+PenaltyBreakBeforeFirstCallParameter: 1
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 10
+PenaltyExcessCharacter: 1000000
+PenaltyReturnTypeOnItsOwnLine: 200
+PenaltyIndentedWhitespace: 0
+
+# Pointer and reference alignment
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+
+# Raw strings
+RawStringFormats:
+  - Language: Cpp
+    Delimiters:
+      - cc
+      - CC
+      - cpp
+      - Cpp
+      - CPP
+      - 'c++'
+      - 'C++'
+    CanonicalDelimiter: ''
+    BasedOnStyle: google
+
+# Comments and documentation
+ReflowComments: true
+CommentPragmas: '^ IWYU pragma:'
+
+# Namespaces
+CompactNamespaces: false
+FixNamespaceComments: true
+NamespaceIndentation: None
+
+# Medical device specific: Always use explicit braces for safety
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Ensure consistent formatting for medical device code reviews
+DeriveLineEnding: false
+UseCRLF: false
+InsertTrailingCommas: None
+
+# C++23 specific settings
+RequiresExpressionIndentation: OuterScope
+SeparateDefinitionBlocks: Leave
+ShortNamespaceLines: 1
+SortJavaStaticImport: Before
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeCaseColon: false
+SpaceBeforeSquareBrackets: false
