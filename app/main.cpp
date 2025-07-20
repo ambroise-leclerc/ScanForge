@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
     // Optional arguments
     app.add_option("-o,--output", config.outputFile, "Output file path");
     app.add_option("-f,--format", config.outputFormat, "Output format")
-        ->check(CLI::IsMember({"ascii", "binary"}))
+        ->check(CLI::IsMember({"ascii", "binary", "binary_compressed"}))
         ->default_val("binary");
     
     // Flags
@@ -136,26 +136,26 @@ int main(int argc, char* argv[]) {
         Logger::getInstance().setLevel(LogLevel::DEBUG);
     }
     
-    LOG_INFO("ScanForge CLI Tool starting...");
+    scanforge::tooling::Log::info("ScanForge CLI Tool starting...");
     
     auto startTime = std::chrono::high_resolution_clock::now();
     
     try {
         // Load the point cloud
-        LOG_INFO("Loading point cloud from: {}", config.inputFile);
+        scanforge::tooling::Log::info("Loading point cloud from: {}", config.inputFile);
         
         PCDLoader loader;
         auto [header, cloud] = loader.loadPCD(config.inputFile);
         
         if (!header.isValid()) {
-            LOG_ERROR("Failed to load point cloud or invalid header");
+            scanforge::tooling::Log::error("Failed to load point cloud or invalid header");
             return 1;
         }
         
         auto loadTime = std::chrono::high_resolution_clock::now();
         auto loadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(loadTime - startTime);
         
-        LOG_INFO("Successfully loaded {} points in {} ms", cloud.size(), loadDuration.count());
+        scanforge::tooling::Log::info("Successfully loaded {} points in {} ms", cloud.size(), loadDuration.count());
         
         // Show file information
         if (config.showInfo) {
@@ -169,8 +169,8 @@ int main(int argc, char* argv[]) {
         
         // Convert and save if output file is specified
         if (!config.outputFile.empty()) {
-            LOG_INFO("Converting to format: {}", config.outputFormat);
-            LOG_INFO("Saving to: {}", config.outputFile);
+            scanforge::tooling::Log::info("Converting to format: {}", config.outputFormat);
+            scanforge::tooling::Log::info("Saving to: {}", config.outputFile);
             
             // Create output directory if it doesn't exist
             fs::path outputPath(config.outputFile);
@@ -178,17 +178,38 @@ int main(int argc, char* argv[]) {
                 fs::create_directories(outputPath.parent_path());
             }
             
-            // For now, just copy the functionality - in the future this would
-            // involve actual format conversion
-            if (config.outputFormat == "ascii" || config.outputFormat == "binary") {
-                // TODO: Implement PCD writer with format selection
-                LOG_WARNING("Format conversion not yet implemented - this is a placeholder");
-                
-                // Simple file copy for now
-                fs::copy_file(config.inputFile, config.outputFile, fs::copy_options::overwrite_existing);
-                LOG_INFO("File copied successfully");
+            // Create header for output format
+            auto outputHeader = PCDLoader::createXYZRGBHeader(cloud, config.outputFormat);
+            
+            auto saveStartTime = std::chrono::high_resolution_clock::now();
+            bool saveResult = false;
+            
+            if (config.outputFormat == "ascii") {
+                saveResult = loader.savePCD_ASCII(config.outputFile, outputHeader, cloud);
+            } else if (config.outputFormat == "binary") {
+                saveResult = loader.savePCD_Binary(config.outputFile, outputHeader, cloud);
+            } else if (config.outputFormat == "binary_compressed") {
+                saveResult = loader.savePCD_BinaryCompressed(config.outputFile, outputHeader, cloud);
             } else {
-                LOG_ERROR("Unsupported output format: {}", config.outputFormat);
+                scanforge::tooling::Log::error("Unsupported output format: {}", config.outputFormat);
+                return 1;
+            }
+            
+            auto saveEndTime = std::chrono::high_resolution_clock::now();
+            auto saveDuration = std::chrono::duration_cast<std::chrono::milliseconds>(saveEndTime - saveStartTime);
+            
+            if (saveResult) {
+                scanforge::tooling::Log::info("Successfully saved {} points to {} format in {} ms", 
+                        cloud.size(), config.outputFormat, saveDuration.count());
+                
+                // Show file size comparison
+                auto inputSize = fs::file_size(config.inputFile);
+                auto outputSize = fs::file_size(config.outputFile);
+                scanforge::tooling::Log::info("File size: {} bytes -> {} bytes ({:.1f}%)", 
+                        inputSize, outputSize, 
+                        (static_cast<double>(outputSize) / static_cast<double>(inputSize)) * 100.0);
+            } else {
+                scanforge::tooling::Log::error("Failed to save point cloud to: {}", config.outputFile);
                 return 1;
             }
         }
@@ -196,13 +217,13 @@ int main(int argc, char* argv[]) {
         auto endTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         
-        LOG_INFO("Total processing time: {} ms", totalDuration.count());
+        scanforge::tooling::Log::info("Total processing time: {} ms", totalDuration.count());
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception occurred: {}", e.what());
+        scanforge::tooling::Log::error("Exception occurred: {}", e.what());
         return 1;
     }
     
-    LOG_INFO("ScanForge CLI Tool completed successfully");
+    scanforge::tooling::Log::info("ScanForge CLI Tool completed successfully");
     return 0;
 }

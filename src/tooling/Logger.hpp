@@ -22,22 +22,23 @@ public:
         return instance;
     }
     
-    void setLevel(LogLevel level) {
-        current_level_ = level;
+    static void setLevel(LogLevel level) {
+        getInstance().current_level_ = level;
     }
     
-    LogLevel getLevel() const {
-        return current_level_;
+    static LogLevel getLevel() {
+        return getInstance().current_level_;
     }
     
     template<typename... Args>
-    void log(LogLevel level, const std::string& format, Args&&... args) {
-        if (level < current_level_) {
+    static void log(LogLevel level, const std::string& format, Args&&... args) {
+        auto& instance = getInstance();
+        if (level < instance.current_level_) {
             return;
         }
         
         auto now = std::chrono::system_clock::now();
-        std::string level_str = getLevelString(level);
+        std::string level_str = instance.getLevelString(level);
         std::string message;
         
         if constexpr (sizeof...(args) > 0) {
@@ -52,22 +53,22 @@ public:
     }
     
     template<typename... Args>
-    void debug(const std::string& format, Args&&... args) {
+    static void debug(const std::string& format, Args&&... args) {
         log(LogLevel::DEBUG, format, std::forward<Args>(args)...);
     }
     
     template<typename... Args>
-    void info(const std::string& format, Args&&... args) {
+    static void info(const std::string& format, Args&&... args) {
         log(LogLevel::INFO, format, std::forward<Args>(args)...);
     }
     
     template<typename... Args>
-    void warning(const std::string& format, Args&&... args) {
+    static void warning(const std::string& format, Args&&... args) {
         log(LogLevel::WARNING, format, std::forward<Args>(args)...);
     }
     
     template<typename... Args>
-    void error(const std::string& format, Args&&... args) {
+    static void error(const std::string& format, Args&&... args) {
         log(LogLevel::ERROR, format, std::forward<Args>(args)...);
     }
 
@@ -86,10 +87,6 @@ private:
     }
 };
 
-// Convenience macros
-#define LOG_DEBUG(...) scanforge::tooling::Logger::getInstance().debug(__VA_ARGS__)
-#define LOG_INFO(...) scanforge::tooling::Logger::getInstance().info(__VA_ARGS__)
-#define LOG_WARNING(...) scanforge::tooling::Logger::getInstance().warning(__VA_ARGS__)
-#define LOG_ERROR(...) scanforge::tooling::Logger::getInstance().error(__VA_ARGS__)
+using Log = Logger;
 
 } // namespace scanforge::tooling

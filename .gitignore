@@ -21,8 +21,6 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-*.cmake
-!cmake/
 
 # Generated documentation
 docs/html/

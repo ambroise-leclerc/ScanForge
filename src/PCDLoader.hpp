@@ -1,11 +1,10 @@
 #pragma once
 
-#include "LZFDecompressor.hpp"
+#include "LZFCodec.hpp"
 #include "PointCloudTypes.hpp"
 #include "tooling/Logger.hpp"
 
 #include <cmath>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -25,13 +24,13 @@ class PCDLoader {
   struct PCDHeader {
     std::string version;
     std::vector<std::string> fields;
-    std::vector<int> sizes;
+    std::vector<uint32_t> sizes;
     std::vector<char> types;
-    std::vector<int> counts;
-    int width = 0;
-    int height = 0;
+    std::vector<uint32_t> counts;
+    uint32_t width = 0;
+    uint32_t height = 0;
     std::string viewpoint;
-    int points = 0;
+    uint32_t points = 0;
     std::string dataType;
 
     bool isValid() const { return !fields.empty() && width > 0 && points > 0; }
@@ -44,9 +43,9 @@ class PCDLoader {
 
     bool hasRGB() const { return std::find(fields.begin(), fields.end(), "rgb") != fields.end(); }
 
-    int getFieldIndex(const std::string& field) const {
+    size_t getFieldIndex(const std::string& field) const {
       auto it = std::find(fields.begin(), fields.end(), field);
-      return (it != fields.end()) ? static_cast<int>(it - fields.begin()) : -1;
+      return (it != fields.end()) ? static_cast<size_t>(it - fields.begin()) : SIZE_MAX;
     }
   };
 
@@ -58,48 +57,155 @@ class PCDLoader {
   std::tuple<PCDHeader, PointCloudXYZRGB> loadPCD(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
-      LOG_ERROR("Failed to open file: {}", filename);
+      scanforge::tooling::Log::error("Failed to open file: {}", filename);
       return {PCDHeader{}, PointCloudXYZRGB{}};
     }
 
     PCDHeader header;
     if (!parseHeader(file, header)) {
-      LOG_ERROR("Failed to parse header from file: {}", filename);
+      scanforge::tooling::Log::error("Failed to parse header from file: {}", filename);
       return {PCDHeader{}, PointCloudXYZRGB{}};
     }
 
     if (!header.isValid() || !header.hasXYZ()) {
-      LOG_ERROR("Invalid header or missing XYZ fields in file: {}", filename);
+      scanforge::tooling::Log::error("Invalid header or missing XYZ fields in file: {}", filename);
       return {header, PointCloudXYZRGB{}};
     }
 
     PointCloudXYZRGB pointCloud;
-    pointCloud.points.reserve(static_cast<size_t>(header.points));
-    pointCloud.width = static_cast<uint32_t>(header.width);
-    pointCloud.height = static_cast<uint32_t>(header.height);
+    pointCloud.points.reserve(header.points);
+    pointCloud.width = header.width;
+    pointCloud.height = header.height;
 
     if (header.dataType == "binary_compressed") {
       if (!loadBinaryCompressed(file, header, pointCloud)) {
-        LOG_ERROR("Failed to load binary compressed data from file: {}", filename);
+        scanforge::tooling::Log::error("Failed to load binary compressed data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else if (header.dataType == "binary") {
       if (!loadBinary(file, header, pointCloud)) {
-        LOG_ERROR("Failed to load binary data from file: {}", filename);
+        scanforge::tooling::Log::error("Failed to load binary data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else if (header.dataType == "ascii") {
       if (!loadASCII(file, header, pointCloud)) {
-        LOG_ERROR("Failed to load ASCII data from file: {}", filename);
+        scanforge::tooling::Log::error("Failed to load ASCII data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else {
-      LOG_ERROR("Unsupported data type '{}' in file: {}", header.dataType, filename);
+      scanforge::tooling::Log::error("Unsupported data type '{}' in file: {}", header.dataType, filename);
       return {header, PointCloudXYZRGB{}};
     }
 
-    LOG_DEBUG("Successfully loaded {} points from file: {}", pointCloud.size(), filename);
+    scanforge::tooling::Log::debug("Successfully loaded {} points from file: {}", pointCloud.size(), filename);
     return {header, pointCloud};
+  }
+
+  /**
+   * @brief Save point cloud to PCD file in ASCII format
+   * @param filename Path to output PCD file
+   * @param header PCD header information
+   * @param pointCloud Point cloud data to save
+   * @return True if save was successful, false otherwise
+   */
+  bool savePCD_ASCII(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      return false;
+    }
+
+    if (!writeHeader(file, header, "ascii")) {
+      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      return false;
+    }
+
+    return writeASCII(file, header, pointCloud);
+  }
+
+  /**
+   * @brief Save point cloud to PCD file in binary format
+   * @param filename Path to output PCD file
+   * @param header PCD header information
+   * @param pointCloud Point cloud data to save
+   * @return True if save was successful, false otherwise
+   */
+  bool savePCD_Binary(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      return false;
+    }
+
+    if (!writeHeader(file, header, "binary")) {
+      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      return false;
+    }
+
+    return writeBinary(file, header, pointCloud);
+  }
+
+  /**
+   * @brief Save point cloud to PCD file in binary compressed format
+   * @param filename Path to output PCD file
+   * @param header PCD header information
+   * @param pointCloud Point cloud data to save
+   * @return True if save was successful, false otherwise
+   */
+  bool savePCD_BinaryCompressed(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      return false;
+    }
+
+    if (!writeHeader(file, header, "binary_compressed")) {
+      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      return false;
+    }
+
+    return writeBinaryCompressed(file, header, pointCloud);
+  }
+
+  /**
+   * @brief Generic save method that automatically determines format from header
+   * @param filename Path to output PCD file
+   * @param header PCD header information (dataType field determines format)
+   * @param pointCloud Point cloud data to save
+   * @return True if save was successful, false otherwise
+   */
+  bool savePCD(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    if (header.dataType == "ascii") {
+      return savePCD_ASCII(filename, header, pointCloud);
+    } else if (header.dataType == "binary") {
+      return savePCD_Binary(filename, header, pointCloud);
+    } else if (header.dataType == "binary_compressed") {
+      return savePCD_BinaryCompressed(filename, header, pointCloud);
+    } else {
+      scanforge::tooling::Log::error("Unsupported data type '{}' for saving", header.dataType);
+      return false;
+    }
+  }
+
+  /**
+   * @brief Create a standard PCD header for XYZRGB point clouds
+   * @param pointCloud Point cloud to create header for
+   * @param dataType Format type ("ascii", "binary", or "binary_compressed")
+   * @return PCDHeader configured for the point cloud
+   */
+  static PCDHeader createXYZRGBHeader(const PointCloudXYZRGB& pointCloud, const std::string& dataType = "ascii") {
+    PCDHeader header;
+    header.version = "0.7";
+    header.fields = {"x", "y", "z", "rgb"};
+    header.sizes = {4, 4, 4, 4};  // float, float, float, uint32
+    header.types = {'F', 'F', 'F', 'U'};  // Float, Float, Float, Unsigned
+    header.counts = {1, 1, 1, 1};
+    header.width = pointCloud.width > 0 ? pointCloud.width : static_cast<uint32_t>(pointCloud.points.size());
+    header.height = pointCloud.height > 0 ? pointCloud.height : 1;
+    header.viewpoint = "0 0 0 1 0 0 0";
+    header.points = static_cast<uint32_t>(pointCloud.points.size());
+    header.dataType = dataType;
+    return header;
   }
 
  private:
@@ -122,7 +228,7 @@ class PCDLoader {
           header.fields.push_back(field);
         }
       } else if (key == "SIZE") {
-        int size;
+        uint32_t size;
         while (iss >> size) {
           header.sizes.push_back(size);
         }
@@ -132,7 +238,7 @@ class PCDLoader {
           header.types.push_back(type);
         }
       } else if (key == "COUNT") {
-        int count;
+        uint32_t count;
         while (iss >> count) {
           header.counts.push_back(count);
         }
@@ -154,7 +260,7 @@ class PCDLoader {
     if (header.fields.size() != header.sizes.size() || 
         header.fields.size() != header.types.size() || 
         header.fields.size() != header.counts.size()) {
-      LOG_ERROR("Header field count mismatch: fields={}, sizes={}, types={}, counts={}", 
+      scanforge::tooling::Log::error("Header field count mismatch: fields={}, sizes={}, types={}, counts={}", 
                 header.fields.size(), header.sizes.size(), header.types.size(), header.counts.size());
       return false;
     }
@@ -169,7 +275,7 @@ class PCDLoader {
     file.read(reinterpret_cast<char*>(&uncompressedSize), sizeof(uncompressedSize));
 
     if (file.fail()) {
-      LOG_ERROR("Failed to read compression header");
+      scanforge::tooling::Log::error("Failed to read compression header");
       return false;
     }
 
@@ -177,19 +283,19 @@ class PCDLoader {
     file.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
 
     if (file.fail()) {
-      LOG_ERROR("Failed to read compressed data");
+      scanforge::tooling::Log::error("Failed to read compressed data");
       return false;
     }
 
-    auto uncompressedData = LZFDecompressor::decompress(compressedData, uncompressedSize);
+    auto uncompressedData = LZFCodec::decompress(compressedData, uncompressedSize);
     if (uncompressedData.empty()) {
-      LOG_ERROR("Failed to decompress data");
+      scanforge::tooling::Log::error("Failed to decompress data");
       return false;
     }
 
     auto reorderedData = reorderFields(uncompressedData, header);
     if (reorderedData.empty()) {
-      LOG_ERROR("Failed to reorder fields");
+      scanforge::tooling::Log::error("Failed to reorder fields");
       return false;
     }
 
@@ -202,15 +308,15 @@ class PCDLoader {
     // Calculate expected data size
     size_t pointSize = 0;
     for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += static_cast<size_t>(header.sizes[i]) * static_cast<size_t>(header.counts[i]);
+      pointSize += header.sizes[i] * header.counts[i];
     }
 
-    size_t totalSize = pointSize * static_cast<size_t>(header.points);
+    size_t totalSize = pointSize * header.points;
     binaryData.resize(totalSize);
 
     file.read(binaryData.data(), static_cast<std::streamsize>(totalSize));
     if (file.gcount() != static_cast<std::streamsize>(totalSize)) {
-      LOG_ERROR("Failed to read expected amount of binary data");
+      scanforge::tooling::Log::error("Failed to read expected amount of binary data");
       return false;
     }
 
@@ -220,12 +326,12 @@ class PCDLoader {
 
   bool loadASCII(std::ifstream& file, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
     std::string line;
-    int xIdx = header.getFieldIndex("x");
-    int yIdx = header.getFieldIndex("y");
-    int zIdx = header.getFieldIndex("z");
-    int rgbIdx = header.getFieldIndex("rgb");
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
 
-    for (int i = 0; i < header.points && std::getline(file, line); ++i) {
+    for (uint32_t i = 0; i < header.points && std::getline(file, line); ++i) {
       std::istringstream iss(line);
       std::vector<std::string> values;
       std::string value;
@@ -237,13 +343,11 @@ class PCDLoader {
       if (values.size() < header.fields.size())
         continue;
 
-      Point3D position(std::stof(values[static_cast<size_t>(xIdx)]), 
-                        std::stof(values[static_cast<size_t>(yIdx)]), 
-                        std::stof(values[static_cast<size_t>(zIdx)]));
+      Point3D position(std::stof(values[xIdx]), std::stof(values[yIdx]), std::stof(values[zIdx]));
 
       RGB color(255, 255, 255);  // Default white
-      if (rgbIdx >= 0 && rgbIdx < static_cast<int>(values.size())) {
-        uint32_t rgbPacked = static_cast<uint32_t>(std::stoul(values[static_cast<size_t>(rgbIdx)]));
+      if (rgbIdx != SIZE_MAX && rgbIdx < values.size()) {
+        uint32_t rgbPacked = static_cast<uint32_t>(std::stoul(values[rgbIdx]));
         color = RGB(rgbPacked);
       }
 
@@ -261,33 +365,33 @@ class PCDLoader {
   }
 
   bool parseBinaryData(const std::vector<uint8_t>& data, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
-    int xIdx = header.getFieldIndex("x");
-    int yIdx = header.getFieldIndex("y");
-    int zIdx = header.getFieldIndex("z");
-    int rgbIdx = header.getFieldIndex("rgb");
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
 
-    if (xIdx < 0 || yIdx < 0 || zIdx < 0) {
-      LOG_ERROR("Missing required XYZ fields");
+    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
+      scanforge::tooling::Log::error("Missing required XYZ fields");
       return false;
     }
 
     size_t pointSize = 0;
     for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += static_cast<size_t>(header.sizes[i]) * static_cast<size_t>(header.counts[i]);
+      pointSize += header.sizes[i] * header.counts[i];
     }
 
-    for (int i = 0; i < header.points; ++i) {
-      size_t offset = static_cast<size_t>(i) * pointSize;
+    for (uint32_t i = 0; i < header.points; ++i) {
+      size_t offset = i * pointSize;
       if (offset + pointSize > data.size()) {
-        LOG_ERROR("Data size mismatch");
+        scanforge::tooling::Log::error("Data size mismatch");
         return false;
       }
 
       // Extract position
-      Point3D position;
+      Point3D position{0.0f, 0.0f, 0.0f};
       size_t fieldOffset = 0;
       
-      for (int j = 0; j < static_cast<int>(header.fields.size()); ++j) {
+      for (size_t j = 0; j < header.fields.size(); ++j) {
         if (j == xIdx) {
           std::memcpy(&position.x, &data[offset + fieldOffset], sizeof(float));
         } else if (j == yIdx) {
@@ -295,23 +399,21 @@ class PCDLoader {
         } else if (j == zIdx) {
           std::memcpy(&position.z, &data[offset + fieldOffset], sizeof(float));
         }
-        fieldOffset += static_cast<size_t>(header.sizes[static_cast<size_t>(j)]) * 
-                       static_cast<size_t>(header.counts[static_cast<size_t>(j)]);
+        fieldOffset += header.sizes[j] * header.counts[j];
       }
 
       // Extract color
       RGB color(255, 255, 255);  // Default white
-      if (rgbIdx >= 0) {
+      if (rgbIdx != SIZE_MAX) {
         fieldOffset = 0;
-        for (int j = 0; j <= rgbIdx; ++j) {
+        for (size_t j = 0; j <= rgbIdx; ++j) {
           if (j == rgbIdx) {
             uint32_t rgbPacked;
             std::memcpy(&rgbPacked, &data[offset + fieldOffset], sizeof(uint32_t));
             color = RGB(rgbPacked);
             break;
           }
-          fieldOffset += static_cast<size_t>(header.sizes[static_cast<size_t>(j)]) * 
-                         static_cast<size_t>(header.counts[static_cast<size_t>(j)]);
+          fieldOffset += header.sizes[j] * header.counts[j];
         }
       }
 
@@ -340,6 +442,168 @@ class PCDLoader {
     // For now, return the data as-is
     // TODO: Implement proper field reordering for binary_compressed format
     return data;
+  }
+
+  bool writeHeader(std::ofstream& file, const PCDHeader& header, const std::string& dataType) {
+    file << "# .PCD v" << header.version << " - Point Cloud Data file format\n";
+    file << "VERSION " << header.version << "\n";
+    
+    file << "FIELDS";
+    for (const auto& field : header.fields) {
+      file << " " << field;
+    }
+    file << "\n";
+    
+    file << "SIZE";
+    for (const auto& size : header.sizes) {
+      file << " " << size;
+    }
+    file << "\n";
+    
+    file << "TYPE";
+    for (const auto& type : header.types) {
+      file << " " << type;
+    }
+    file << "\n";
+    
+    file << "COUNT";
+    for (const auto& count : header.counts) {
+      file << " " << count;
+    }
+    file << "\n";
+    
+    file << "WIDTH " << header.width << "\n";
+    file << "HEIGHT " << header.height << "\n";
+    file << "VIEWPOINT " << header.viewpoint << "\n";
+    file << "POINTS " << header.points << "\n";
+    file << "DATA " << dataType << "\n";
+    
+    return file.good();
+  }
+
+  bool writeASCII(std::ofstream& file, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
+
+    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
+      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      return false;
+    }
+
+    for (const auto& point : pointCloud.points) {
+      // Write all fields in the order specified by the header
+      for (size_t i = 0; i < header.fields.size(); ++i) {
+        if (i > 0) file << " ";
+        
+        if (i == xIdx) {
+          file << point.position.x;
+        } else if (i == yIdx) {
+          file << point.position.y;
+        } else if (i == zIdx) {
+          file << point.position.z;
+        } else if (i == rgbIdx && rgbIdx != SIZE_MAX) {
+          file << point.color.toPacked();
+        } else {
+          file << "0"; // Default value for unknown fields
+        }
+      }
+      file << "\n";
+    }
+    
+    return file.good();
+  }
+
+  bool writeBinary(std::ofstream& file, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
+
+    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
+      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      return false;
+    }
+
+    for (const auto& point : pointCloud.points) {
+      // Write all fields in the order specified by the header
+      for (size_t i = 0; i < header.fields.size(); ++i) {
+        if (i == xIdx) {
+          file.write(reinterpret_cast<const char*>(&point.position.x), sizeof(float));
+        } else if (i == yIdx) {
+          file.write(reinterpret_cast<const char*>(&point.position.y), sizeof(float));
+        } else if (i == zIdx) {
+          file.write(reinterpret_cast<const char*>(&point.position.z), sizeof(float));
+        } else if (i == rgbIdx && rgbIdx != SIZE_MAX) {
+          uint32_t rgbPacked = point.color.toPacked();
+          file.write(reinterpret_cast<const char*>(&rgbPacked), sizeof(uint32_t));
+        } else {
+          // Write default values for unknown fields based on their size
+          std::vector<uint8_t> defaultValue(header.sizes[i], 0);
+          file.write(reinterpret_cast<const char*>(defaultValue.data()), header.sizes[i]);
+        }
+      }
+    }
+    
+    return file.good();
+  }
+
+  bool writeBinaryCompressed(std::ofstream& file, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
+
+    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
+      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      return false;
+    }
+
+    // Generate binary data into a vector
+    std::vector<uint8_t> uncompressedData;
+    for (const auto& point : pointCloud.points) {
+      for (size_t i = 0; i < header.fields.size(); ++i) {
+        if (i == xIdx) {
+          const auto* ptr = reinterpret_cast<const uint8_t*>(&point.position.x);
+          uncompressedData.insert(uncompressedData.end(), ptr, ptr + sizeof(float));
+        } else if (i == yIdx) {
+          const auto* ptr = reinterpret_cast<const uint8_t*>(&point.position.y);
+          uncompressedData.insert(uncompressedData.end(), ptr, ptr + sizeof(float));
+        } else if (i == zIdx) {
+          const auto* ptr = reinterpret_cast<const uint8_t*>(&point.position.z);
+          uncompressedData.insert(uncompressedData.end(), ptr, ptr + sizeof(float));
+        } else if (i == rgbIdx && rgbIdx != SIZE_MAX) {
+          uint32_t rgbPacked = point.color.toPacked();
+          const auto* ptr = reinterpret_cast<const uint8_t*>(&rgbPacked);
+          uncompressedData.insert(uncompressedData.end(), ptr, ptr + sizeof(uint32_t));
+        } else {
+          // Add default values for unknown fields
+          for (uint32_t j = 0; j < header.sizes[i]; ++j) {
+            uncompressedData.push_back(0);
+          }
+        }
+      }
+    }
+
+    // Compress the data
+    auto compressedData = LZFCodec::compress(uncompressedData);
+    if (compressedData.empty()) {
+      scanforge::tooling::Log::error("Failed to compress point cloud data");
+      return false;
+    }
+
+    // Write compression header
+    uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
+    uint32_t uncompressedSize = static_cast<uint32_t>(uncompressedData.size());
+    
+    file.write(reinterpret_cast<const char*>(&compressedSize), sizeof(compressedSize));
+    file.write(reinterpret_cast<const char*>(&uncompressedSize), sizeof(uncompressedSize));
+    
+    // Write compressed data
+    file.write(reinterpret_cast<const char*>(compressedData.data()), static_cast<std::streamsize>(compressedData.size()));
+    
+    return file.good();
   }
 };
 

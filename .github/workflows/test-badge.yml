@@ -1,0 +1,72 @@
+name: Update Test Badge
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+jobs:
+  update-badge:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'skipped'
+    steps:
+      - name: Download test artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{ github.event.workflow_run.id }},
+            });
+            
+            const testArtifact = artifacts.data.artifacts.find(artifact => 
+              artifact.name.includes('test-results-ubuntu-latest'));
+            
+            if (testArtifact) {
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: testArtifact.id,
+                archive_format: 'zip',
+              });
+              
+              const fs = require('fs');
+              fs.writeFileSync('test-results.zip', Buffer.from(download.data));
+            }
+
+      - name: Extract and analyze test results
+        run: |
+          if [ -f "test-results.zip" ]; then
+            unzip -q test-results.zip
+            
+            if [ -f "test_output.log" ]; then
+              if grep -q "100% tests passed" test_output.log; then
+                echo "BADGE_STATUS=passing" >> $GITHUB_ENV
+                echo "BADGE_COLOR=brightgreen" >> $GITHUB_ENV
+              else
+                echo "BADGE_STATUS=failing" >> $GITHUB_ENV
+                echo "BADGE_COLOR=red" >> $GITHUB_ENV
+              fi
+              
+              TOTAL_TESTS=$(grep -c "Test #.*Passed\|Test #.*Failed" test_output.log || echo "0")
+              PASSED_TESTS=$(grep -c "Test #.*Passed" test_output.log || echo "0")
+              echo "BADGE_MESSAGE=${PASSED_TESTS}/${TOTAL_TESTS} tests ${BADGE_STATUS}" >> $GITHUB_ENV
+            else
+              echo "BADGE_STATUS=unknown" >> $GITHUB_ENV
+              echo "BADGE_COLOR=lightgrey" >> $GITHUB_ENV
+              echo "BADGE_MESSAGE=tests unknown" >> $GITHUB_ENV
+            fi
+          else
+            echo "BADGE_STATUS=no-data" >> $GITHUB_ENV
+            echo "BADGE_COLOR=lightgrey" >> $GITHUB_ENV
+            echo "BADGE_MESSAGE=no test data" >> $GITHUB_ENV
+          fi
+
+      - name: Output badge information
+        run: |
+          echo "Test Status: ${{ env.BADGE_STATUS }}"
+          echo "Badge Message: ${{ env.BADGE_MESSAGE }}"
+          echo "Badge Color: ${{ env.BADGE_COLOR }}"
+          echo "Badge information ready for use in README or external services"
