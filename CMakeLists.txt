@@ -41,11 +41,8 @@ add_subdirectory(src)
 # Add the executable subdirectory
 add_subdirectory(app)
 
-# Testing
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
     include(CTest)
     add_subdirectory(tests)
-endif()
 
 # Display build configuration summary
 include(DisplayStatus)

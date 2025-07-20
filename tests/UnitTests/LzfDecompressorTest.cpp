@@ -11,7 +11,10 @@
 #include <filesystem>
 #include <array>
 #include <cstring>
+#include <chrono>
+#include <numeric>
 
+using namespace std;
 using namespace scanforge;
 
 /**
@@ -19,10 +22,10 @@ using namespace scanforge;
  * @param uncompressed The uncompressed data to compress
  * @return A vector containing LZF compressed data
  */
-std::vector<uint8_t> createSimpleLzfData(const std::vector<uint8_t>& uncompressed) {
+vector<uint8_t> createSimpleLzfData(const vector<uint8_t>& uncompressed) {
     // Simple test case: literal data (no compression)
     // LZF format: if first byte < 32, it's a literal run
-    std::vector<uint8_t> compressed;
+    vector<uint8_t> compressed;
     
     if (uncompressed.size() <= 31) {
         compressed.push_back(static_cast<uint8_t>(uncompressed.size() - 1));
@@ -31,11 +34,11 @@ std::vector<uint8_t> createSimpleLzfData(const std::vector<uint8_t>& uncompresse
         // For larger data, create chunks of literals
         size_t pos = 0;
         while (pos < uncompressed.size()) {
-            size_t chunkSize = std::min(size_t(31), uncompressed.size() - pos);
+            size_t chunkSize = min(size_t(31), uncompressed.size() - pos);
             compressed.push_back(static_cast<uint8_t>(chunkSize - 1));
             compressed.insert(compressed.end(), 
-                            uncompressed.begin() + static_cast<std::ptrdiff_t>(pos), 
-                            uncompressed.begin() + static_cast<std::ptrdiff_t>(pos + chunkSize));
+                            uncompressed.begin() + static_cast<ptrdiff_t>(pos), 
+                            uncompressed.begin() + static_cast<ptrdiff_t>(pos + chunkSize));
             pos += chunkSize;
         }
     }
@@ -45,7 +48,7 @@ std::vector<uint8_t> createSimpleLzfData(const std::vector<uint8_t>& uncompresse
 
 TEST_CASE("LZFDecompressor basic functionality", "[LZFDecompressor]") {
     GIVEN("simple literal data (uncompressed in LZF format)") {
-        std::vector<uint8_t> originalData = {0x01, 0x02, 0x03, 0x04, 0x05};
+        vector<uint8_t> originalData = {0x01, 0x02, 0x03, 0x04, 0x05};
         auto compressed = createSimpleLzfData(originalData);
         WHEN("decompressing the data") {
             auto result = LZFDecompressor::decompress(compressed, originalData.size());
@@ -56,8 +59,8 @@ TEST_CASE("LZFDecompressor basic functionality", "[LZFDecompressor]") {
         }
     }
     GIVEN("larger data that requires multiple literal chunks") {
-        std::vector<uint8_t> originalData(100);
-        std::iota(originalData.begin(), originalData.end(), 0);
+        vector<uint8_t> originalData(100);
+        iota(originalData.begin(), originalData.end(), uint8_t{0});
         auto compressed = createSimpleLzfData(originalData);
         WHEN("decompressing the data") {
             auto result = LZFDecompressor::decompress(compressed, originalData.size());
@@ -68,7 +71,7 @@ TEST_CASE("LZFDecompressor basic functionality", "[LZFDecompressor]") {
         }
     }
     GIVEN("repeating pattern data") {
-        std::vector<uint8_t> originalData;
+        vector<uint8_t> originalData;
         for (int i = 0; i < 50; ++i) {
             originalData.push_back(static_cast<uint8_t>(i % 10));
         }
@@ -85,7 +88,7 @@ TEST_CASE("LZFDecompressor basic functionality", "[LZFDecompressor]") {
 
 TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
     GIVEN("empty compressed data") {
-        std::vector<uint8_t> emptyCompressed;
+        vector<uint8_t> emptyCompressed;
         WHEN("decompressing") {
             auto result = LZFDecompressor::decompress(emptyCompressed, 0);
             THEN("the result is empty") {
@@ -94,7 +97,7 @@ TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
         }
     }
     GIVEN("a single byte of data") {
-        std::vector<uint8_t> singleByte = {0x42};
+        vector<uint8_t> singleByte = {0x42};
         auto compressed = createSimpleLzfData(singleByte);
         WHEN("decompressing") {
             auto result = LZFDecompressor::decompress(compressed, 1);
@@ -105,7 +108,7 @@ TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
         }
     }
     GIVEN("invalid expected size (too large)") {
-        std::vector<uint8_t> someData = {0x01, 0x02, 0x03};
+        vector<uint8_t> someData = {0x01, 0x02, 0x03};
         WHEN("decompressing with too large expected size") {
             auto result = LZFDecompressor::decompress(someData, 1000);
             THEN("the result is empty") {
@@ -114,7 +117,7 @@ TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
         }
     }
     GIVEN("invalid expected size (too small)") {
-        std::vector<uint8_t> originalData = {0x01, 0x02, 0x03, 0x04, 0x05};
+        vector<uint8_t> originalData = {0x01, 0x02, 0x03, 0x04, 0x05};
         auto compressed = createSimpleLzfData(originalData);
         WHEN("decompressing with too small expected size") {
             auto result = LZFDecompressor::decompress(compressed, 2);
@@ -124,7 +127,7 @@ TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
         }
     }
     GIVEN("corrupted compressed data") {
-        std::vector<uint8_t> corruptedData = {0xFF, 0xFF, 0xFF};
+        vector<uint8_t> corruptedData = {0xFF, 0xFF, 0xFF};
         WHEN("decompressing") {
             auto result = LZFDecompressor::decompress(corruptedData, 10);
             THEN("the result is empty") {
@@ -135,24 +138,24 @@ TEST_CASE("LZFDecompressor edge cases", "[LZFDecompressor]") {
 }
 
 TEST_CASE("LZFDecompressor with real PCD data", "[LZFDecompressor][integration]") {
-    const std::string testDataPath = "tests/data/sample.pcd";
+    const string testDataPath = "tests/data/sample.pcd";
     
     SECTION("Load and process real PCD file") {
         // Check if test data file exists
-        if (!std::filesystem::exists(testDataPath)) {
+        if (!filesystem::exists(testDataPath)) {
             SKIP("Test data file not found: " + testDataPath);
         }
         
         // Load the PCD file using PCDLoader to get compressed data
-        std::ifstream file(testDataPath, std::ios::binary);
+        ifstream file(testDataPath, ios::binary);
         REQUIRE(file.is_open());
         
         // Read the header to find the data section
-        std::string line;
+        string line;
         size_t dataOffset = 0;
         
-        while (std::getline(file, line)) {
-            if (line.find("DATA binary_compressed") != std::string::npos) {
+        while (getline(file, line)) {
+            if (line.find("DATA binary_compressed") != string::npos) {
                 auto pos = file.tellg();
                 dataOffset = static_cast<size_t>(pos);
                 break;
@@ -162,10 +165,10 @@ TEST_CASE("LZFDecompressor with real PCD data", "[LZFDecompressor][integration]"
         REQUIRE(dataOffset > 0);
         
         // Read some compressed data for testing
-        file.seekg(static_cast<std::streamoff>(dataOffset));
-        std::vector<uint8_t> compressedChunk(1024); // Read first 1KB
+        file.seekg(static_cast<streamoff>(dataOffset));
+        vector<uint8_t> compressedChunk(1024); // Read first 1KB
         file.read(reinterpret_cast<char*>(compressedChunk.data()), 
-                 static_cast<std::streamsize>(compressedChunk.size()));
+                 static_cast<streamsize>(compressedChunk.size()));
         auto bytesReadPos = file.gcount();
         size_t bytesRead = static_cast<size_t>(bytesReadPos);
         compressedChunk.resize(bytesRead);
@@ -187,7 +190,7 @@ TEST_CASE("LZFDecompressor performance characteristics", "[LZFDecompressor][perf
     SECTION("Large data decompression performance") {
         // Create a large dataset for performance testing
         constexpr size_t dataSize = 10000;
-        std::vector<uint8_t> originalData(dataSize);
+        vector<uint8_t> originalData(dataSize);
         
         // Fill with pseudo-random but compressible data
         for (size_t i = 0; i < dataSize; ++i) {
@@ -197,11 +200,11 @@ TEST_CASE("LZFDecompressor performance characteristics", "[LZFDecompressor][perf
         auto compressed = createSimpleLzfData(originalData);
         
         // Measure decompression time (basic performance test)
-        auto start = std::chrono::high_resolution_clock::now();
+        auto start = chrono::high_resolution_clock::now();
         auto result = LZFDecompressor::decompress(compressed, originalData.size());
-        auto end = std::chrono::high_resolution_clock::now();
+        auto end = chrono::high_resolution_clock::now();
         
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
         
         REQUIRE(result.size() == originalData.size());
         REQUIRE(result == originalData);
@@ -213,22 +216,22 @@ TEST_CASE("LZFDecompressor performance characteristics", "[LZFDecompressor][perf
     SECTION("Memory efficiency test") {
         // Test that decompression doesn't use excessive memory
         constexpr size_t dataSize = 1000;
-        std::vector<uint8_t> originalData(dataSize, 0xAA); // All same byte
+        vector<uint8_t> originalData(dataSize, 0xAA); // All same byte
         
         auto compressed = createSimpleLzfData(originalData);
         auto result = LZFDecompressor::decompress(compressed, originalData.size());
         
         REQUIRE(result.size() == originalData.size());
-        REQUIRE(std::all_of(result.begin(), result.end(), [](uint8_t b) { return b == 0xAA; }));
+        REQUIRE(all_of(result.begin(), result.end(), [](uint8_t b) { return b == 0xAA; }));
     }
 }
 
 TEST_CASE("LZFDecompressor API consistency", "[LZFDecompressor]") {
     SECTION("Pointer-based API") {
-        std::vector<uint8_t> originalData = {0x10, 0x20, 0x30, 0x40};
+        vector<uint8_t> originalData = {0x10, 0x20, 0x30, 0x40};
         auto compressed = createSimpleLzfData(originalData);
         
-        std::vector<uint8_t> output(originalData.size());
+        vector<uint8_t> output(originalData.size());
         
         size_t decompressedSize = LZFDecompressor::decompress(
             compressed.data(), compressed.size(),
@@ -236,11 +239,11 @@ TEST_CASE("LZFDecompressor API consistency", "[LZFDecompressor]") {
         );
         
         REQUIRE(decompressedSize == originalData.size());
-        REQUIRE(std::equal(output.begin(), output.end(), originalData.begin()));
+        REQUIRE(equal(output.begin(), output.end(), originalData.begin()));
     }
     
     SECTION("Vector-based API") {
-        std::vector<uint8_t> originalData = {0x10, 0x20, 0x30, 0x40};
+        vector<uint8_t> originalData = {0x10, 0x20, 0x30, 0x40};
         auto compressed = createSimpleLzfData(originalData);
         
         auto result = LZFDecompressor::decompress(compressed, originalData.size());
@@ -250,13 +253,13 @@ TEST_CASE("LZFDecompressor API consistency", "[LZFDecompressor]") {
     }
     
     SECTION("API consistency between methods") {
-        std::vector<uint8_t> originalData = {0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5};
+        vector<uint8_t> originalData = {0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5};
         auto compressed = createSimpleLzfData(originalData);
         
         // Test both APIs produce the same result
         auto vectorResult = LZFDecompressor::decompress(compressed, originalData.size());
         
-        std::vector<uint8_t> pointerResult(originalData.size());
+        vector<uint8_t> pointerResult(originalData.size());
         size_t decompressedSize = LZFDecompressor::decompress(
             compressed.data(), compressed.size(),
             pointerResult.data(), pointerResult.size()
