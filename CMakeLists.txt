@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 4.0)
-project(  ScanForge VERSION 0.0.1 DESCRIPTION "Modern C++23 Point Cloud Processing Library" LANGUAGES CXX)
+# CMake 4.0+ provides full C++23 modules support
+
+# Set the project name and version
+project(
+    ScanForge
+    VERSION 1.0.0
+    DESCRIPTION "Modern C++23 Point Cloud Processing Library"
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
