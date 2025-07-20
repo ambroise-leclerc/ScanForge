@@ -81,7 +81,7 @@ jobs:
           ctest --output-junit TestResults.xml 2>/dev/null || echo "JUnit XML not supported in this CTest version"
           
           # Count test results and get detailed info
-          TOTAL_TESTS=$(ctest --test-dir . --dry-run | grep -c "Test #" || echo "0")
+          TOTAL_TESTS=$(ctest --test-dir . -N | grep "Test #" | wc -l || echo "0")
           echo "**Platform:** ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
           echo "**Total Tests:** $TOTAL_TESTS" >> $GITHUB_STEP_SUMMARY
           echo "**Build Type:** Release" >> $GITHUB_STEP_SUMMARY
@@ -147,7 +147,7 @@ jobs:
             build/TestResults.xml
           check_name: "Test Results"
           comment_title: "Unit Test Results"
-          comment_mode: update last
+          comment_mode: update_last
           compare_to_earlier_commit: true
 
       - name: Create test badge
@@ -162,7 +162,7 @@ jobs:
             echo "TESTS_COLOR=red" >> $GITHUB_ENV
           fi
           
-          TOTAL_TESTS=$(ctest --test-dir . --dry-run | grep -c "Test #" || echo "0")
+          TOTAL_TESTS=$(ctest --test-dir . -N | grep "Test #" | wc -l || echo "0")
           echo "TESTS_COUNT=$TOTAL_TESTS" >> $GITHUB_ENV
 
       - name: Comment test results on PR
