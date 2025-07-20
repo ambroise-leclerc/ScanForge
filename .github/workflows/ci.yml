@@ -11,15 +11,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest, android-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up modern GCC (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-14 g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.22.0'
+          cmake-version: '4.0.0'
 
       - name: Set up Ninja
         uses: seanmiddleditch/gha-setup-ninja@v4
@@ -33,8 +41,4 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
-        if: matrix.os != 'android-latest'
-
-      - name: Android build (experimental)
-        if: matrix.os == 'android-latest'
-        run: echo 'Android build steps would go here (requires custom setup)'
+        
