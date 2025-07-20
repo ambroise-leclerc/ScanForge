@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <format>
+#include <print>
 #include <chrono>
 #include <source_location>
 
@@ -47,9 +48,9 @@ public:
             message = format;
         }
         
-        std::cout << std::format("[{:%Y-%m-%d %H:%M:%S}] [{}] {}\n", 
-                                std::chrono::floor<std::chrono::seconds>(now), 
-                                level_str, message);
+        std::println("[{:%Y-%m-%d %H:%M:%S}] [{}] {}", 
+                     std::chrono::floor<std::chrono::seconds>(now), 
+                     level_str, message);
     }
     
     template<typename... Args>

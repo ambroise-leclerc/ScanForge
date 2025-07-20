@@ -20,6 +20,7 @@
 
 namespace scanforge {
 using namespace tooling;
+using Log = scanforge::tooling::Log;
 
 /**
  * @brief PCD (Point Cloud Data) file loader supporting binary compressed format
@@ -62,18 +63,18 @@ class PCDLoader {
   std::tuple<PCDHeader, PointCloudXYZRGB> loadPCD(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
-      scanforge::tooling::Log::error("Failed to open file: {}", filename);
+      Log::error("Failed to open file: {}", filename);
       return {PCDHeader{}, PointCloudXYZRGB{}};
     }
 
     PCDHeader header;
     if (!parseHeader(file, header)) {
-      scanforge::tooling::Log::error("Failed to parse header from file: {}", filename);
+      Log::error("Failed to parse header from file: {}", filename);
       return {PCDHeader{}, PointCloudXYZRGB{}};
     }
 
     if (!header.isValid() || !header.hasXYZ()) {
-      scanforge::tooling::Log::error("Invalid header or missing XYZ fields in file: {}", filename);
+      Log::error("Invalid header or missing XYZ fields in file: {}", filename);
       return {header, PointCloudXYZRGB{}};
     }
 
@@ -84,25 +85,25 @@ class PCDLoader {
 
     if (header.dataType == "binary_compressed") {
       if (!loadBinaryCompressed(file, header, pointCloud)) {
-        scanforge::tooling::Log::error("Failed to load binary compressed data from file: {}", filename);
+        Log::error("Failed to load binary compressed data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else if (header.dataType == "binary") {
       if (!loadBinary(file, header, pointCloud)) {
-        scanforge::tooling::Log::error("Failed to load binary data from file: {}", filename);
+        Log::error("Failed to load binary data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else if (header.dataType == "ascii") {
       if (!loadASCII(file, header, pointCloud)) {
-        scanforge::tooling::Log::error("Failed to load ASCII data from file: {}", filename);
+        Log::error("Failed to load ASCII data from file: {}", filename);
         return {header, PointCloudXYZRGB{}};
       }
     } else {
-      scanforge::tooling::Log::error("Unsupported data type '{}' in file: {}", header.dataType, filename);
+      Log::error("Unsupported data type '{}' in file: {}", header.dataType, filename);
       return {header, PointCloudXYZRGB{}};
     }
 
-    scanforge::tooling::Log::debug("Successfully loaded {} points from file: {}", pointCloud.size(), filename);
+    Log::debug("Successfully loaded {} points from file: {}", pointCloud.size(), filename);
     return {header, pointCloud};
   }
 
@@ -116,12 +117,12 @@ class PCDLoader {
   bool savePCD_ASCII(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
     std::ofstream file(filename);
     if (!file.is_open()) {
-      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      Log::error("Failed to create file: {}", filename);
       return false;
     }
 
     if (!writeHeader(file, header, "ascii")) {
-      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      Log::error("Failed to write header to file: {}", filename);
       return false;
     }
 
@@ -138,12 +139,12 @@ class PCDLoader {
   bool savePCD_Binary(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open()) {
-      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      Log::error("Failed to create file: {}", filename);
       return false;
     }
 
     if (!writeHeader(file, header, "binary")) {
-      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      Log::error("Failed to write header to file: {}", filename);
       return false;
     }
 
@@ -160,12 +161,12 @@ class PCDLoader {
   bool savePCD_BinaryCompressed(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& pointCloud) {
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open()) {
-      scanforge::tooling::Log::error("Failed to create file: {}", filename);
+      Log::error("Failed to create file: {}", filename);
       return false;
     }
 
     if (!writeHeader(file, header, "binary_compressed")) {
-      scanforge::tooling::Log::error("Failed to write header to file: {}", filename);
+      Log::error("Failed to write header to file: {}", filename);
       return false;
     }
 
@@ -187,7 +188,7 @@ class PCDLoader {
     } else if (header.dataType == "binary_compressed") {
       return savePCD_BinaryCompressed(filename, header, pointCloud);
     } else {
-      scanforge::tooling::Log::error("Unsupported data type '{}' for saving", header.dataType);
+      Log::error("Unsupported data type '{}' for saving", header.dataType);
       return false;
     }
   }
@@ -331,7 +332,7 @@ class PCDLoader {
     if (header.fields.size() != header.sizes.size() || 
         header.fields.size() != header.types.size() || 
         header.fields.size() != header.counts.size()) {
-      scanforge::tooling::Log::error("Header field count mismatch: fields={}, sizes={}, types={}, counts={}", 
+      Log::error("Header field count mismatch: fields={}, sizes={}, types={}, counts={}", 
                 header.fields.size(), header.sizes.size(), header.types.size(), header.counts.size());
       return false;
     }
@@ -364,13 +365,13 @@ class PCDLoader {
 
     auto uncompressedData = LZFCodec::decompress(compressedData, uncompressedSize);
     if (uncompressedData.empty()) {
-      scanforge::tooling::Log::error("Failed to decompress data");
+      Log::error("Failed to decompress data");
       return false;
     }
 
     auto reorderedData = reorderFields(uncompressedData, header);
     if (reorderedData.empty()) {
-      scanforge::tooling::Log::error("Failed to reorder fields");
+      Log::error("Failed to reorder fields");
       return false;
     }
 
@@ -576,7 +577,7 @@ class PCDLoader {
     size_t rgbIdx = header.getFieldIndex("rgb");
 
     if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
-      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      Log::error("Missing required XYZ fields in header");
       return false;
     }
 
@@ -610,7 +611,7 @@ class PCDLoader {
     size_t rgbIdx = header.getFieldIndex("rgb");
 
     if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
-      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      Log::error("Missing required XYZ fields in header");
       return false;
     }
 
@@ -644,7 +645,7 @@ class PCDLoader {
     size_t rgbIdx = header.getFieldIndex("rgb");
 
     if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
-      scanforge::tooling::Log::error("Missing required XYZ fields in header");
+      Log::error("Missing required XYZ fields in header");
       return false;
     }
 
@@ -677,7 +678,7 @@ class PCDLoader {
     // Compress the data
     auto compressedData = LZFCodec::compress(uncompressedData);
     if (compressedData.empty()) {
-      scanforge::tooling::Log::error("Failed to compress point cloud data");
+      Log::error("Failed to compress point cloud data");
       return false;
     }
 

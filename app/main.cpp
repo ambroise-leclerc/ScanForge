@@ -4,6 +4,7 @@
 #include <fstream>
 #include <chrono>
 #include <format>
+#include <print>
 
 #include <CLI/CLI.hpp>
 
@@ -33,7 +34,7 @@ struct AppConfig {
  * @param filename The name of the file being analyzed
  */
 void printFileInfo(const PCDLoader::PCDHeader& header, const std::string& filename) {
-    std::cout << std::format(R"(
+    std::println(R"(
 File Information for: {}
 ========================
 Version:    {}
@@ -44,7 +45,6 @@ Fields:     {}
 Viewpoint:  {}
 Has XYZ:    {}
 Has RGB:    {}
-
 )", filename, header.version, header.points, header.width, header.height,
        header.dataType, 
        [&]() {
@@ -66,7 +66,7 @@ Has RGB:    {}
  */
 void printStatistics(const PointCloudXYZRGB& cloud) {
     if (cloud.empty()) {
-        std::cout << "No points to analyze.\n";
+        std::println("No points to analyze.");
         return;
     }
     
@@ -81,7 +81,7 @@ void printStatistics(const PointCloudXYZRGB& cloud) {
     }
     centroid = centroid * (1.0f / static_cast<float>(cloud.size()));
     
-    std::cout << std::format(R"(
+    std::println(R"(
 Point Cloud Statistics
 ======================
 Total Points:    {}
@@ -94,7 +94,6 @@ Bounding Box:
   Size:          ({:.3f}, {:.3f}, {:.3f})
 
 Centroid:        ({:.3f}, {:.3f}, {:.3f})
-
 )", cloud.size(), cloud.is_dense ? "Yes" : "No",
        minPt.x, minPt.y, minPt.z,
        maxPt.x, maxPt.y, maxPt.z,
@@ -136,26 +135,26 @@ int main(int argc, char* argv[]) {
         Logger::getInstance().setLevel(LogLevel::DEBUG);
     }
     
-    scanforge::tooling::Log::info("ScanForge CLI Tool starting...");
+    Log::info("ScanForge CLI Tool starting...");
     
     auto startTime = std::chrono::high_resolution_clock::now();
     
     try {
         // Load the point cloud
-        scanforge::tooling::Log::info("Loading point cloud from: {}", config.inputFile);
+        Log::info("Loading point cloud from: {}", config.inputFile);
         
         PCDLoader loader;
         auto [header, cloud] = loader.loadPCD(config.inputFile);
         
         if (!header.isValid()) {
-            scanforge::tooling::Log::error("Failed to load point cloud or invalid header");
+            Log::error("Failed to load point cloud or invalid header");
             return 1;
         }
         
         auto loadTime = std::chrono::high_resolution_clock::now();
         auto loadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(loadTime - startTime);
         
-        scanforge::tooling::Log::info("Successfully loaded {} points in {} ms", cloud.size(), loadDuration.count());
+        Log::info("Successfully loaded {} points in {} ms", cloud.size(), loadDuration.count());
         
         // Show file information
         if (config.showInfo) {
@@ -169,8 +168,8 @@ int main(int argc, char* argv[]) {
         
         // Convert and save if output file is specified
         if (!config.outputFile.empty()) {
-            scanforge::tooling::Log::info("Converting to format: {}", config.outputFormat);
-            scanforge::tooling::Log::info("Saving to: {}", config.outputFile);
+            Log::info("Converting to format: {}", config.outputFormat);
+            Log::info("Saving to: {}", config.outputFile);
             
             // Create output directory if it doesn't exist
             fs::path outputPath(config.outputFile);
@@ -191,7 +190,7 @@ int main(int argc, char* argv[]) {
             } else if (config.outputFormat == "binary_compressed") {
                 saveResult = loader.savePCD_BinaryCompressed(config.outputFile, outputHeader, cloud);
             } else {
-                scanforge::tooling::Log::error("Unsupported output format: {}", config.outputFormat);
+                Log::error("Unsupported output format: {}", config.outputFormat);
                 return 1;
             }
             
@@ -199,17 +198,17 @@ int main(int argc, char* argv[]) {
             auto saveDuration = std::chrono::duration_cast<std::chrono::milliseconds>(saveEndTime - saveStartTime);
             
             if (saveResult) {
-                scanforge::tooling::Log::info("Successfully saved {} points to {} format in {} ms", 
+                Log::info("Successfully saved {} points to {} format in {} ms", 
                         cloud.size(), config.outputFormat, saveDuration.count());
                 
                 // Show file size comparison
                 auto inputSize = fs::file_size(config.inputFile);
                 auto outputSize = fs::file_size(config.outputFile);
-                scanforge::tooling::Log::info("File size: {} bytes -> {} bytes ({:.1f}%)", 
+                Log::info("File size: {} bytes -> {} bytes ({:.1f}%)", 
                         inputSize, outputSize, 
                         (static_cast<double>(outputSize) / static_cast<double>(inputSize)) * 100.0);
             } else {
-                scanforge::tooling::Log::error("Failed to save point cloud to: {}", config.outputFile);
+                Log::error("Failed to save point cloud to: {}", config.outputFile);
                 return 1;
             }
         }
@@ -217,13 +216,13 @@ int main(int argc, char* argv[]) {
         auto endTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         
-        scanforge::tooling::Log::info("Total processing time: {} ms", totalDuration.count());
+        Log::info("Total processing time: {} ms", totalDuration.count());
         
     } catch (const std::exception& e) {
-        scanforge::tooling::Log::error("Exception occurred: {}", e.what());
+        Log::error("Exception occurred: {}", e.what());
         return 1;
     }
     
-    scanforge::tooling::Log::info("ScanForge CLI Tool completed successfully");
+    Log::info("ScanForge CLI Tool completed successfully");
     return 0;
 }
