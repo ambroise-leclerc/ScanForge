@@ -4,14 +4,15 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include "PCDLoader.hpp"
-#include "LZFCodec.hpp"
+#include "PCDProcessor.hpp"
+#include "codec/LZFCodec.hpp"
 #include "PointCloudTypes.hpp"
 #include "tooling/Logger.hpp"
 #include <filesystem>
 #include <chrono>
 
 using namespace scanforge;
+using namespace scanforge::codec;
 using namespace scanforge::tooling;
 
 TEST_CASE("ScanForge integration tests", "[integration]") {
@@ -46,7 +47,7 @@ TEST_CASE("ScanForge integration tests", "[integration]") {
 
 TEST_CASE("Component integration", "[integration]") {
     GIVEN("a mock PCD header and LZFCodec") {
-        PCDLoader::PCDHeader header;
+        PCDProcessor::PCDHeader header;
         header.version = "0.7";
         header.fields = {"x", "y", "z"};
         header.sizes = {4, 4, 4};

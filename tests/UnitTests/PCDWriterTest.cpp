@@ -3,7 +3,7 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include "PCDLoader.hpp"
+#include "PCDProcessor.hpp"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -23,10 +23,10 @@ TEST_CASE("PCD writing functionality", "[PCDWriter][file_io]") {
         pointCloud.height = 1;
         pointCloud.is_dense = true;
 
-        PCDLoader loader;
+        PCDProcessor loader;
         
         WHEN("creating a header and saving as ASCII") {
-            auto header = PCDLoader::createXYZRGBHeader(pointCloud, "ascii");
+            auto header = PCDProcessor::createXYZRGBHeader(pointCloud, "ascii");
             
             THEN("the header is valid") {
                 REQUIRE(header.isValid());
@@ -63,7 +63,7 @@ TEST_CASE("PCD writing functionality", "[PCDWriter][file_io]") {
         }
         
         WHEN("saving as binary format") {
-            auto header = PCDLoader::createXYZRGBHeader(pointCloud, "binary");
+            auto header = PCDProcessor::createXYZRGBHeader(pointCloud, "binary");
             string filename = "test_output_binary.pcd";
             
             bool saveResult = loader.savePCD_Binary(filename, header, pointCloud);
@@ -90,7 +90,7 @@ TEST_CASE("PCD writing functionality", "[PCDWriter][file_io]") {
         }
         
         WHEN("saving as binary compressed format") {
-            auto header = PCDLoader::createXYZRGBHeader(pointCloud, "binary_compressed");
+            auto header = PCDProcessor::createXYZRGBHeader(pointCloud, "binary_compressed");
             string filename = "test_output_compressed.pcd";
             
             bool saveResult = loader.savePCD_BinaryCompressed(filename, header, pointCloud);
@@ -120,7 +120,7 @@ TEST_CASE("PCD writing functionality", "[PCDWriter][file_io]") {
 
 TEST_CASE("PCD round-trip validation with sample files", "[PCDWriter][validation]") {
     GIVEN("existing sample PCD files") {
-        PCDLoader loader;
+        PCDProcessor loader;
         
         WHEN("loading and saving sample.pcd in different formats") {
             auto [originalHeader, originalCloud] = loader.loadPCD("tests/data/sample.pcd");
@@ -130,7 +130,7 @@ TEST_CASE("PCD round-trip validation with sample files", "[PCDWriter][validation
                 REQUIRE(!originalCloud.empty());
                 
                 AND_WHEN("saving as ASCII and reloading") {
-                    auto asciiHeader = PCDLoader::createXYZRGBHeader(originalCloud, "ascii");
+                    auto asciiHeader = PCDProcessor::createXYZRGBHeader(originalCloud, "ascii");
                     string asciiFilename = "roundtrip_ascii.pcd";
                     
                     bool saveResult = loader.savePCD_ASCII(asciiFilename, asciiHeader, originalCloud);
@@ -154,7 +154,7 @@ TEST_CASE("PCD round-trip validation with sample files", "[PCDWriter][validation
                 }
                 
                 AND_WHEN("saving as binary and reloading") {
-                    auto binaryHeader = PCDLoader::createXYZRGBHeader(originalCloud, "binary");
+                    auto binaryHeader = PCDProcessor::createXYZRGBHeader(originalCloud, "binary");
                     string binaryFilename = "roundtrip_binary.pcd";
                     
                     bool saveResult = loader.savePCD_Binary(binaryFilename, binaryHeader, originalCloud);
@@ -183,11 +183,11 @@ TEST_CASE("PCD round-trip validation with sample files", "[PCDWriter][validation
 
 TEST_CASE("PCD writing error handling", "[PCDWriter][error_handling]") {
     GIVEN("invalid scenarios for PCD writing") {
-        PCDLoader loader;
+        PCDProcessor loader;
         PointCloudXYZRGB emptyCloud;
         
         WHEN("attempting to save to an invalid path") {
-            auto header = PCDLoader::createXYZRGBHeader(emptyCloud, "ascii");
+            auto header = PCDProcessor::createXYZRGBHeader(emptyCloud, "ascii");
             bool result = loader.savePCD_ASCII("/invalid/path/file.pcd", header, emptyCloud);
             
             THEN("the save operation fails gracefully") {
@@ -196,7 +196,7 @@ TEST_CASE("PCD writing error handling", "[PCDWriter][error_handling]") {
         }
         
         WHEN("using generic savePCD with unknown format") {
-            auto header = PCDLoader::createXYZRGBHeader(emptyCloud, "unknown_format");
+            auto header = PCDProcessor::createXYZRGBHeader(emptyCloud, "unknown_format");
             bool result = loader.savePCD("test_unknown.pcd", header, emptyCloud);
             
             THEN("the save operation fails gracefully") {
@@ -210,7 +210,7 @@ TEST_CASE("PCD header creation", "[PCDWriter][header]") {
     GIVEN("various point cloud configurations") {
         WHEN("creating header for empty point cloud") {
             PointCloudXYZRGB emptyCloud;
-            auto header = PCDLoader::createXYZRGBHeader(emptyCloud, "ascii");
+            auto header = PCDProcessor::createXYZRGBHeader(emptyCloud, "ascii");
             
             THEN("the header has correct default values") {
                 REQUIRE(header.version == "0.7");
@@ -231,7 +231,7 @@ TEST_CASE("PCD header creation", "[PCDWriter][header]") {
             structuredCloud.width = 3;
             structuredCloud.height = 4;
             
-            auto header = PCDLoader::createXYZRGBHeader(structuredCloud, "binary");
+            auto header = PCDProcessor::createXYZRGBHeader(structuredCloud, "binary");
             
             THEN("the header preserves the structure") {
                 REQUIRE(header.width == 3);
@@ -251,17 +251,17 @@ TEST_CASE("PCD format compatibility", "[PCDWriter][compatibility]") {
             PointXYZRGB(Point3D(-1.5f, 2.7f, -0.8f), RGB(255, 255, 255))
         };
         
-        PCDLoader loader;
+        PCDProcessor loader;
         
         WHEN("saving and reloading through all formats") {
-            auto originalHeader = PCDLoader::createXYZRGBHeader(coloredCloud, "ascii");
+            auto originalHeader = PCDProcessor::createXYZRGBHeader(coloredCloud, "ascii");
             
             // Test all three formats
             vector<string> formats = {"ascii", "binary", "binary_compressed"};
             
             for (const auto& format : formats) {
                 string filename = "compatibility_test_" + format + ".pcd";
-                auto header = PCDLoader::createXYZRGBHeader(coloredCloud, format);
+                auto header = PCDProcessor::createXYZRGBHeader(coloredCloud, format);
                 
                 bool saveResult = loader.savePCD(filename, header, coloredCloud);
                 REQUIRE(saveResult);

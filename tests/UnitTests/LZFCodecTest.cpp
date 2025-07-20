@@ -4,8 +4,8 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include "LZFCodec.hpp"
-#include "PCDLoader.hpp"
+#include "codec/LZFCodec.hpp"
+#include "PCDProcessor.hpp"
 #include <vector>
 #include <fstream>
 #include <filesystem>
@@ -16,6 +16,7 @@
 
 using namespace std;
 using namespace scanforge;
+using namespace scanforge::codec;
 
 /**
  * @brief Helper function to create simple LZF compressed test data
@@ -146,7 +147,7 @@ TEST_CASE("LZFCodec with real PCD data", "[LZFCodec][integration]") {
             SKIP("Test data file not found: " + testDataPath);
         }
         
-        // Load the PCD file using PCDLoader to get compressed data
+        // Load the PCD file using PCDProcessor to get compressed data
         ifstream file(testDataPath, ios::binary);
         REQUIRE(file.is_open());
         

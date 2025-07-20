@@ -1,12 +1,28 @@
 # ScanForge
 
-![CI](https://github.com/your-username/ScanForge/workflows/CI/badge.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![CI](https://github.com/ambroise-leclerc/ScanForge/workflows/CI/badge.svg)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux)
 ![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
 
-ScanForge is point cloud data loading library. It provides a uniform interface for loading or saving point cloud data in various formats.
+ScanForge is a C++23 point cloud data loading/saving library. It provides a uniform interface for loading or saving point cloud data in various formats.
+
+## Basic CLI Usage
+```bash
+# Show file information
+./scanforge input.pcd --info
+
+# Show detailed statistics
+./scanforge input.pcd --stats
+
+# Convert PCD to LAS format
+./scanforge input.pcd -o output.las --format las
+
+# Convert to different PCD variants
+./scanforge input.pcd -o output_ascii.pcd --format pcd --variant ascii
+./scanforge input.pcd -o output_binary.pcd --format pcd --variant binary
+./scanforge input.pcd -o output_compressed.pcd --format pcd --variant compressed
+```
 
 ## Requirements
 
@@ -21,19 +37,20 @@ ScanForge is point cloud data loading library. It provides a uniform interface f
 ## Supported Formats
 
 ### Input Formats
-- **PCD (Point Cloud Data)** - ASCII, Binary, Binary Compressed
+- **PCD (Point Cloud Data)**
+  - ASCII
+  - Binary
+  - Binary Compressed
+- **LAS (LASer format)**
+  - Binary
 
-### Output Formats  
-- **PCD (Point Cloud Data)** - ASCII, Binary (Binary Compressed coming soon)
-
-## Requirements
-
-- **CMake** 4.0 or higher (for full C++23 modules support)
-- **C++23** compatible compiler with modules support:
-  - GCC 14+ (for modules)
-  - Clang 17+ (for modules) 
-  - **MSVC 2022 17.6+** (Visual Studio 2022 version 17.6 or later for C++23 support)
-  - Android NDK r26+
+### Output Formats
+- **PCD (Point Cloud Data)**
+  - ASCII
+  - Binary
+  - Binary Compressed
+- **LAS (LASer format)**
+  - Binary
 
 ## Quick Start
 
@@ -91,60 +108,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPIL
 cmake --build .
 ```
 
-## Project Structure
-
-```
-ScanForge/
-├── app/                    # CLI application
-│   ├── main.cpp
-│   └── CMakeLists.txt
-├── src/                    # Core library
-│   ├── PCDLoader.hpp       # PCD file loader
-│   ├── LZFDecompressor.hpp # LZF decompression
-│   ├── PointCloudTypes.hpp # Point cloud data structures
-│   ├── tooling/
-│   │   └── Logger.hpp      # Logging utilities
-│   └── CMakeLists.txt
-├── tests/                  # Unit tests
-│   ├── CMakeLists.txt
-│   ├── data/               # Test data
-│   │   ├── bunny.pcd
-│   │   ├── milk_cartoon_all_small_clorox.pcd
-│   │   ├── sample_compressed.pcd
-│   │   └── sample.pcd
-│   └── UnitTests/
-│       ├── MainTest.cpp
-│       ├── PointCloudTypesTest.cpp
-│       └── LzfDecompressorTest.cpp
-├── cmake/                  # CMake modules
-│   ├── StandardProjectSettings.cmake
-│   ├── CompilerWarnings.cmake
-│   └── ...
-└── CMakeLists.txt         # Main CMake file
-
-```cpp
-#include "src/PCDLoader.hpp"
-#include "src/PointCloudTypes.hpp"
-
-using namespace scanforge;
-
-int main() {
-    PCDLoader loader;
-    auto [header, cloud] = loader.loadPCD("input.pcd");
-    
-    if (header.isValid()) {
-        std::cout << "Loaded " << cloud.size() << " points\n";
-        // Get bounding box
-        auto [min_pt, max_pt] = cloud.getBoundingBox();
-        std::cout << "Bounding box: (" << min_pt.x << ", " << min_pt.y 
-                  << ", " << min_pt.z << ") to (" << max_pt.x << ", " 
-                  << max_pt.y << ", " << max_pt.z << ")\n";
-    }
-    return 0;
-}
-```
-
-## Platform-Specific Build Instructions
+### Platform-Specific Build Instructions
 
 ### Windows (Visual Studio)
 
@@ -195,7 +159,53 @@ cmake .. \
 cmake --build .
 ```
 
+## CLI Usage
+
+The ScanForge CLI tool provides an easy way to convert between different point cloud formats and analyze point cloud data.
+
+### Basic Usage
+
+```bash
+# Show file information
+./scanforge input.pcd --info
+
+# Show detailed statistics
+./scanforge input.pcd --stats
+
+# Convert PCD to LAS format
+./scanforge input.pcd -o output.las --format las
+
+# Convert to different PCD variants
+./scanforge input.pcd -o output_ascii.pcd --format pcd --variant ascii
+./scanforge input.pcd -o output_binary.pcd --format pcd --variant binary
+./scanforge input.pcd -o output_compressed.pcd --format pcd --variant compressed
+```
+
+### Command Line Options
+
+- `input`: Input file path (required)
+- `-o, --output`: Output file path
+- `-f, --format`: Output format (`pcd` or `las`, default: `pcd`)
+- `--variant`: PCD variant (`ascii`, `binary`, or `compressed`, default: `ascii`)
+- `-i, --info`: Show file information
+- `-s, --stats`: Show detailed statistics
+- `-v, --verbose`: Enable verbose logging
+
+### Examples
+
+```bash
+# Basic file analysis
+./scanforge data/bunny.pcd --info --stats
+
+# Convert LAS to ASCII PCD
+./scanforge scan.las -o scan.pcd --format pcd --variant ascii
+
+# Convert PCD to compressed format with verbose output
+./scanforge input.pcd -o output.pcd --variant compressed --verbose
+```
+
 ## Project Structure
+
 
 ```
 ScanForge/
@@ -203,28 +213,42 @@ ScanForge/
 │   ├── main.cpp
 │   └── CMakeLists.txt
 ├── src/                    # Core library
+│   ├── LASLoader.hpp       # LAS file loader
 │   ├── PCDLoader.hpp       # PCD file loader
-│   ├── LZFDecompressor.hpp # LZF decompression
 │   ├── PointCloudTypes.hpp # Point cloud data structures
+│   ├── codec/              # Compression codecs
+│   │   └── LZFCodec.hpp    # LZF compression/decompression
 │   ├── tooling/
 │   │   └── Logger.hpp      # Logging utilities
 │   └── CMakeLists.txt
 ├── tests/                  # Unit tests
-│   └── unit_tests/
-│       ├── test_main.cpp
-│       ├── test_point_cloud_types.cpp
-│       └── test_lzf_decompressor.cpp
+│   ├── CMakeLists.txt
+│   ├── data/               # Test data
+│   │   ├── bunny.pcd
+│   │   ├── milk_cartoon_all_small_clorox.pcd
+│   │   ├── sample_compressed.pcd
+│   │   └── sample.pcd
+│   └── UnitTests/
+│       ├── MainTest.cpp
+│       ├── PointCloudTypesTest.cpp
+│       └── LzfDecompressorTest.cpp
 ├── cmake/                  # CMake modules
 │   ├── StandardProjectSettings.cmake
 │   ├── CompilerWarnings.cmake
+│   ├── Cache.cmake
+│   ├── CPM.cmake
+│   ├── Doxygen.cmake
 │   └── ...
-└── CMakeLists.txt         # Main CMake file
+├── docs/                   # Documentation
+│   ├── CMakeLists.txt
+│   └── Doxyfile.in
+├── CONTRIBUTING.md         # Contribution guidelines
+└── CMakeLists.txt          # Main CMake file
 ```
 
 ## API Reference
 
 ### Core Classes
-
 
 #### `PointCloud<T>`
 Generic point cloud container supporting different point types.
@@ -245,54 +269,32 @@ public:
 ```
 
 #### `PCDLoader`
-Loads PCD files with support for multiple formats.
+Loads and saves PCD files with support for multiple formats.
 
 ```cpp
 class PCDLoader {
 public:
     struct PCDHeader { /* ... */ };
 
-    std::pair<PCDHeader, PointCloud<PointXYZRGB>> loadPCD(const std::string& filename);
+    std::pair<PCDHeader, PointCloudXYZRGB> loadPCD(const std::string& filename);
+    bool savePCD_ASCII(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& cloud);
+    bool savePCD_Binary(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& cloud);
+    bool savePCD_BinaryCompressed(const std::string& filename, const PCDHeader& header, const PointCloudXYZRGB& cloud);
     bool isValidPCD(const std::string& filename);
 };
 ```
 
-### Point Types
+#### `LASLoader`
+Loads and saves LAS files.
 
-- `Point3D` - Basic 3D point (x, y, z)
-- `RGB` - Color information (r, g, b)
-- `PointXYZRGB` - Point with position and color
-- `PointCloud<Point3D>` - Point cloud with XYZ points
-- `PointCloud<PointXYZRGB>` - Point cloud with colored points
+```cpp
+class LASLoader {
+public:
+    struct LASHeader { /* ... */ };
 
-## Contributing
+    std::pair<LASHeader, PointCloudXYZRGB> loadLAS(const std::string& filename);
+    bool saveLAS(const std::string& filename, const LASHeader& header, const PointCloudXYZRGB& cloud);
+    bool isValidLAS(const std::string& filename);
+};
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Roadmap
-
-- [ ] **v1.1**: PLY format support
-- [ ] **v1.2**: LAS/LAZ format support  
-- [ ] **v1.3**: Advanced point cloud algorithms (filtering, segmentation)
-- [ ] **v1.4**: GPU acceleration support
-- [ ] **v2.0**: Real-time processing capabilities
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- LZF compression algorithm by Marc Lehmann
-- Point Cloud Library (PCL) for inspiration
-- Modern CMake practices from various community resources
-
-## Support
-
-- 📧 **Email**: [support@scanforge.dev](mailto:support@scanforge.dev)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/ambroise-leclerc/ScanForge/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ambroise-leclerc/ScanForge/discussions)
