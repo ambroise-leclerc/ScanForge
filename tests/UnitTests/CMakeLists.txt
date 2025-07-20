@@ -5,6 +5,7 @@ set(TEST_SOURCES
     MainTest.cpp
     LZFCodecTest.cpp
     PointCloudTypesTest.cpp
+    PCDWriterTest.cpp
 )
 
 # Create test executable

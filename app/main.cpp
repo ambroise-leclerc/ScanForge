@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
     // Optional arguments
     app.add_option("-o,--output", config.outputFile, "Output file path");
     app.add_option("-f,--format", config.outputFormat, "Output format")
-        ->check(CLI::IsMember({"ascii", "binary"}))
+        ->check(CLI::IsMember({"ascii", "binary", "binary_compressed"}))
         ->default_val("binary");
     
     // Flags
@@ -178,17 +178,38 @@ int main(int argc, char* argv[]) {
                 fs::create_directories(outputPath.parent_path());
             }
             
-            // For now, just copy the functionality - in the future this would
-            // involve actual format conversion
-            if (config.outputFormat == "ascii" || config.outputFormat == "binary") {
-                // TODO: Implement PCD writer with format selection
-                LOG_WARNING("Format conversion not yet implemented - this is a placeholder");
-                
-                // Simple file copy for now
-                fs::copy_file(config.inputFile, config.outputFile, fs::copy_options::overwrite_existing);
-                LOG_INFO("File copied successfully");
+            // Create header for output format
+            auto outputHeader = PCDLoader::createXYZRGBHeader(cloud, config.outputFormat);
+            
+            auto saveStartTime = std::chrono::high_resolution_clock::now();
+            bool saveResult = false;
+            
+            if (config.outputFormat == "ascii") {
+                saveResult = loader.savePCD_ASCII(config.outputFile, outputHeader, cloud);
+            } else if (config.outputFormat == "binary") {
+                saveResult = loader.savePCD_Binary(config.outputFile, outputHeader, cloud);
+            } else if (config.outputFormat == "binary_compressed") {
+                saveResult = loader.savePCD_BinaryCompressed(config.outputFile, outputHeader, cloud);
             } else {
                 LOG_ERROR("Unsupported output format: {}", config.outputFormat);
+                return 1;
+            }
+            
+            auto saveEndTime = std::chrono::high_resolution_clock::now();
+            auto saveDuration = std::chrono::duration_cast<std::chrono::milliseconds>(saveEndTime - saveStartTime);
+            
+            if (saveResult) {
+                LOG_INFO("Successfully saved {} points to {} format in {} ms", 
+                        cloud.size(), config.outputFormat, saveDuration.count());
+                
+                // Show file size comparison
+                auto inputSize = fs::file_size(config.inputFile);
+                auto outputSize = fs::file_size(config.outputFile);
+                LOG_INFO("File size: {} bytes -> {} bytes ({:.1f}%)", 
+                        inputSize, outputSize, 
+                        (static_cast<double>(outputSize) / static_cast<double>(inputSize)) * 100.0);
+            } else {
+                LOG_ERROR("Failed to save point cloud to: {}", config.outputFile);
                 return 1;
             }
         }

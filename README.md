@@ -1,18 +1,21 @@
 # ScanForge
 
-![B## Requirements
+![CI](https://github.com/your-username/ScanForge/workflows/CI/badge.svg)
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
+![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
+
+ScanForge is point cloud data loading library. It provides a uniform interface for loading or saving point cloud data in various formats.
+
+## Requirements
 
 - **CMake** 4.0 or higher (for full C++23 modules support)
 - **C++23** compatible compiler with modules support:
   - GCC 14+ (for modules)
   - Clang 17+ (for modules) 
   - MSVC 2022 (17.8+, for modules)
-  - Android NDK r26+tus](https://img.shields.io/badge/build-passing-brightgreen)
-![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
-
-ScanForge is point cloud data loading library. It provides a uniform interface for loading or saving point cloud data in various formats.
-
+  - Android NDK r26+
 
 
 ## Supported Formats

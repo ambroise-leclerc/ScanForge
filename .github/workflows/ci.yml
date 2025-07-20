@@ -43,11 +43,13 @@ jobs:
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Configure CMake (Unix)
         if: matrix.os != 'windows-latest'
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Display compiler info
         run: |
@@ -61,6 +63,179 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+      - name: Run tests with detailed output
+        run: |
+          echo "::group::Running CTest with detailed output"
+          ctest --test-dir build --output-on-failure --verbose
+          echo "::endgroup::"
+        
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "::group::Test Results Summary"
+          cd build
+          echo "## 📊 Test Results Summary - ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Try to generate XML output (may not be available in all CTest versions)
+          ctest --output-junit TestResults.xml 2>/dev/null || echo "JUnit XML not supported in this CTest version"
+          
+          # Count test results and get detailed info
+          TOTAL_TESTS=$(ctest --test-dir . --dry-run | grep -c "Test #" || echo "0")
+          echo "**Platform:** ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Tests:** $TOTAL_TESTS" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Type:** Release" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Run tests and capture detailed results
+          if ctest --test-dir . --output-on-failure --verbose > test_output.log 2>&1; then
+            PASSED_TESTS=$(grep -c "Passed" test_output.log || echo "0")
+            echo "**Status:** ✅ All tests passed ($PASSED_TESTS/$TOTAL_TESTS)" >> $GITHUB_STEP_SUMMARY
+            
+            # Extract test timing information
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⏱️ Performance Summary" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep "Test #.*Passed" test_output.log | head -10 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            FAILED_TESTS=$(grep -c "Failed" test_output.log || echo "0")
+            PASSED_TESTS=$(grep -c "Passed" test_output.log || echo "0")
+            echo "**Status:** ❌ Some tests failed ($PASSED_TESTS passed, $FAILED_TESTS failed)" >> $GITHUB_STEP_SUMMARY
+            
+            # Show failed tests
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -A5 -B5 "FAILED\|Failed" test_output.log | head -30 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Show test categories
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Test Categories" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "LZF Codec Tests: $(grep -c 'LZFCodec' test_output.log || echo '0')"
+          echo "PCD Writer Tests: $(grep -c 'PCDWriter' test_output.log || echo '0')"
+          echo "Point Cloud Tests: $(grep -c 'PointCloud' test_output.log || echo '0')"
+          echo "Integration Tests: $(grep -c 'integration' test_output.log || echo '0')"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Add total execution time
+          TOTAL_TIME=$(grep "Total Test time" test_output.log | tail -1 | grep -o "[0-9.]*" | tail -1 || echo "N/A")
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Execution Time:** ${TOTAL_TIME} seconds" >> $GITHUB_STEP_SUMMARY
+          echo "::endgroup::"
+        shell: bash
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/TestResults.xml
+            build/test_output.log
+          retention-days: 7
+
+      - name: Publish test results
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            build/TestResults.xml
+          check_name: "Test Results"
+          comment_title: "Unit Test Results"
+          comment_mode: update last
+          compare_to_earlier_commit: true
+
+      - name: Create test badge
+        if: always() && matrix.os == 'ubuntu-latest'
+        run: |
+          cd build
+          if ctest --test-dir . --output-on-failure > /dev/null 2>&1; then
+            echo "TESTS_STATUS=passing" >> $GITHUB_ENV
+            echo "TESTS_COLOR=brightgreen" >> $GITHUB_ENV
+          else
+            echo "TESTS_STATUS=failing" >> $GITHUB_ENV  
+            echo "TESTS_COLOR=red" >> $GITHUB_ENV
+          fi
+          
+          TOTAL_TESTS=$(ctest --test-dir . --dry-run | grep -c "Test #" || echo "0")
+          echo "TESTS_COUNT=$TOTAL_TESTS" >> $GITHUB_ENV
+
+      - name: Comment test results on PR
+        if: always() && github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'build/test_output.log';
+            
+            let testOutput = '```\nNo test output available\n```';
+            if (fs.existsSync(path)) {
+              const fullOutput = fs.readFileSync(path, 'utf8');
+              const lines = fullOutput.split('\n');
+              const summary = lines.slice(-10).join('\n');
+              testOutput = '```\n' + summary + '\n```';
+            }
+            
+            const comment = `## 🧪 Test Results for ${{ matrix.os }}
+            
+            ${testOutput}
+            
+            📊 **Full test reports available in the Actions artifacts**`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  test-summary:
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+
+      - name: Generate combined test report
+        run: |
+          echo "# 📋 ScanForge Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          
+          for os in ubuntu-latest macos-latest windows-latest; do
+            # Look for platform-specific test output files
+            test_file="test_output.log"
+            if [ -f "$test_file" ]; then
+              if grep -q "100% tests passed" "$test_file" 2>/dev/null; then
+                echo "| $os | ✅ Passed | All tests successful |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| $os | ❌ Failed | Some tests failed |" >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "| $os | ⚠️ Unknown | No test results found |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Test Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "test_output.log" ]; then
+            TOTAL_TESTS=$(grep -o "Total Test time" test_output.log | wc -l || echo "0")
+            echo "**Cross-platform test runs completed:** $TOTAL_TESTS" >> $GITHUB_STEP_SUMMARY
+            
+            if [ -f "TestResults.xml" ]; then
+              echo "**JUnit XML reports generated:** ✅" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
         
