@@ -3,7 +3,7 @@
 # Define test sources
 set(TEST_SOURCES
     MainTest.cpp
-    LzfDecompressorTest.cpp
+    LZFCodecTest.cpp
     PointCloudTypesTest.cpp
 )
 

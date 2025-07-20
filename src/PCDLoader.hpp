@@ -1,11 +1,10 @@
 #pragma once
 
-#include "LZFDecompressor.hpp"
+#include "LZFCodec.hpp"
 #include "PointCloudTypes.hpp"
 #include "tooling/Logger.hpp"
 
 #include <cmath>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -25,13 +24,13 @@ class PCDLoader {
   struct PCDHeader {
     std::string version;
     std::vector<std::string> fields;
-    std::vector<int> sizes;
+    std::vector<uint32_t> sizes;
     std::vector<char> types;
-    std::vector<int> counts;
-    int width = 0;
-    int height = 0;
+    std::vector<uint32_t> counts;
+    uint32_t width = 0;
+    uint32_t height = 0;
     std::string viewpoint;
-    int points = 0;
+    uint32_t points = 0;
     std::string dataType;
 
     bool isValid() const { return !fields.empty() && width > 0 && points > 0; }
@@ -44,9 +43,9 @@ class PCDLoader {
 
     bool hasRGB() const { return std::find(fields.begin(), fields.end(), "rgb") != fields.end(); }
 
-    int getFieldIndex(const std::string& field) const {
+    size_t getFieldIndex(const std::string& field) const {
       auto it = std::find(fields.begin(), fields.end(), field);
-      return (it != fields.end()) ? static_cast<int>(it - fields.begin()) : -1;
+      return (it != fields.end()) ? static_cast<size_t>(it - fields.begin()) : SIZE_MAX;
     }
   };
 
@@ -74,9 +73,9 @@ class PCDLoader {
     }
 
     PointCloudXYZRGB pointCloud;
-    pointCloud.points.reserve(static_cast<size_t>(header.points));
-    pointCloud.width = static_cast<uint32_t>(header.width);
-    pointCloud.height = static_cast<uint32_t>(header.height);
+    pointCloud.points.reserve(header.points);
+    pointCloud.width = header.width;
+    pointCloud.height = header.height;
 
     if (header.dataType == "binary_compressed") {
       if (!loadBinaryCompressed(file, header, pointCloud)) {
@@ -122,7 +121,7 @@ class PCDLoader {
           header.fields.push_back(field);
         }
       } else if (key == "SIZE") {
-        int size;
+        uint32_t size;
         while (iss >> size) {
           header.sizes.push_back(size);
         }
@@ -132,7 +131,7 @@ class PCDLoader {
           header.types.push_back(type);
         }
       } else if (key == "COUNT") {
-        int count;
+        uint32_t count;
         while (iss >> count) {
           header.counts.push_back(count);
         }
@@ -181,7 +180,7 @@ class PCDLoader {
       return false;
     }
 
-    auto uncompressedData = LZFDecompressor::decompress(compressedData, uncompressedSize);
+    auto uncompressedData = LZFCodec::decompress(compressedData, uncompressedSize);
     if (uncompressedData.empty()) {
       LOG_ERROR("Failed to decompress data");
       return false;
@@ -202,10 +201,10 @@ class PCDLoader {
     // Calculate expected data size
     size_t pointSize = 0;
     for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += static_cast<size_t>(header.sizes[i]) * static_cast<size_t>(header.counts[i]);
+      pointSize += header.sizes[i] * header.counts[i];
     }
 
-    size_t totalSize = pointSize * static_cast<size_t>(header.points);
+    size_t totalSize = pointSize * header.points;
     binaryData.resize(totalSize);
 
     file.read(binaryData.data(), static_cast<std::streamsize>(totalSize));
@@ -220,12 +219,12 @@ class PCDLoader {
 
   bool loadASCII(std::ifstream& file, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
     std::string line;
-    int xIdx = header.getFieldIndex("x");
-    int yIdx = header.getFieldIndex("y");
-    int zIdx = header.getFieldIndex("z");
-    int rgbIdx = header.getFieldIndex("rgb");
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
 
-    for (int i = 0; i < header.points && std::getline(file, line); ++i) {
+    for (uint32_t i = 0; i < header.points && std::getline(file, line); ++i) {
       std::istringstream iss(line);
       std::vector<std::string> values;
       std::string value;
@@ -237,13 +236,11 @@ class PCDLoader {
       if (values.size() < header.fields.size())
         continue;
 
-      Point3D position(std::stof(values[static_cast<size_t>(xIdx)]), 
-                        std::stof(values[static_cast<size_t>(yIdx)]), 
-                        std::stof(values[static_cast<size_t>(zIdx)]));
+      Point3D position(std::stof(values[xIdx]), std::stof(values[yIdx]), std::stof(values[zIdx]));
 
       RGB color(255, 255, 255);  // Default white
-      if (rgbIdx >= 0 && rgbIdx < static_cast<int>(values.size())) {
-        uint32_t rgbPacked = static_cast<uint32_t>(std::stoul(values[static_cast<size_t>(rgbIdx)]));
+      if (rgbIdx != SIZE_MAX && rgbIdx < values.size()) {
+        uint32_t rgbPacked = static_cast<uint32_t>(std::stoul(values[rgbIdx]));
         color = RGB(rgbPacked);
       }
 
@@ -261,33 +258,33 @@ class PCDLoader {
   }
 
   bool parseBinaryData(const std::vector<uint8_t>& data, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
-    int xIdx = header.getFieldIndex("x");
-    int yIdx = header.getFieldIndex("y");
-    int zIdx = header.getFieldIndex("z");
-    int rgbIdx = header.getFieldIndex("rgb");
+    size_t xIdx = header.getFieldIndex("x");
+    size_t yIdx = header.getFieldIndex("y");
+    size_t zIdx = header.getFieldIndex("z");
+    size_t rgbIdx = header.getFieldIndex("rgb");
 
-    if (xIdx < 0 || yIdx < 0 || zIdx < 0) {
+    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
       LOG_ERROR("Missing required XYZ fields");
       return false;
     }
 
     size_t pointSize = 0;
     for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += static_cast<size_t>(header.sizes[i]) * static_cast<size_t>(header.counts[i]);
+      pointSize += header.sizes[i] * header.counts[i];
     }
 
-    for (int i = 0; i < header.points; ++i) {
-      size_t offset = static_cast<size_t>(i) * pointSize;
+    for (uint32_t i = 0; i < header.points; ++i) {
+      size_t offset = i * pointSize;
       if (offset + pointSize > data.size()) {
         LOG_ERROR("Data size mismatch");
         return false;
       }
 
       // Extract position
-      Point3D position{0.0f, 0.0f, 0.0f};  // Initialize to zero to avoid uninitialized warning
+      Point3D position;
       size_t fieldOffset = 0;
       
-      for (int j = 0; j < static_cast<int>(header.fields.size()); ++j) {
+      for (size_t j = 0; j < header.fields.size(); ++j) {
         if (j == xIdx) {
           std::memcpy(&position.x, &data[offset + fieldOffset], sizeof(float));
         } else if (j == yIdx) {
@@ -295,23 +292,21 @@ class PCDLoader {
         } else if (j == zIdx) {
           std::memcpy(&position.z, &data[offset + fieldOffset], sizeof(float));
         }
-        fieldOffset += static_cast<size_t>(header.sizes[static_cast<size_t>(j)]) * 
-                       static_cast<size_t>(header.counts[static_cast<size_t>(j)]);
+        fieldOffset += header.sizes[j] * header.counts[j];
       }
 
       // Extract color
       RGB color(255, 255, 255);  // Default white
-      if (rgbIdx >= 0) {
+      if (rgbIdx != SIZE_MAX) {
         fieldOffset = 0;
-        for (int j = 0; j <= rgbIdx; ++j) {
+        for (size_t j = 0; j <= rgbIdx; ++j) {
           if (j == rgbIdx) {
             uint32_t rgbPacked;
             std::memcpy(&rgbPacked, &data[offset + fieldOffset], sizeof(uint32_t));
             color = RGB(rgbPacked);
             break;
           }
-          fieldOffset += static_cast<size_t>(header.sizes[static_cast<size_t>(j)]) * 
-                         static_cast<size_t>(header.counts[static_cast<size_t>(j)]);
+          fieldOffset += header.sizes[j] * header.counts[j];
         }
       }
 
