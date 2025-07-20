@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest, android-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.22.0'
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v4
+
+      - name: Configure CMake
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+        if: matrix.os != 'android-latest'
+
+      - name: Android build (experimental)
+        if: matrix.os == 'android-latest'
+        run: echo 'Android build steps would go here (requires custom setup)'

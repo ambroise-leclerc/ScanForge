@@ -4,16 +4,9 @@
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
 
-ScanForge is a modern C++23 point cloud processing library designed for high-performance and cross-platform compatibility. It provides a clean, modern API for loading, processing, and converting point cloud data.
+ScanForge is point cloud data loading library. It provides a uniform interface for loading or saving point cloud data in various formats.
 
-## Features
 
-- 🚀 **Modern C++23** - Leverages the latest C++ features for performance and safety
-- 🌐 **Cross-Platform** - Supports Windows, Linux, macOS, and Android
-- 📊 **Point Cloud Support** - Currently supports PCD format (ASCII, Binary, Binary Compressed)
-- 🛠️ **CLI Tool** - Command-line interface for point cloud analysis and conversion
-- 🧪 **Comprehensive Testing** - Full unit test coverage
-- 📚 **Well Documented** - Extensive documentation and examples
 
 ## Supported Formats
 
@@ -53,31 +46,37 @@ cmake --build .
 # Run tests (optional)
 ctest --verbose
 
-# Install (optional)
-cmake --install .
-```
-
-### Using the CLI Tool
-
-```bash
-# Show file information
-./scanforge input.pcd --info
-
-# Show detailed statistics
-./scanforge input.pcd --stats --verbose
-
-# Convert format
-./scanforge input.pcd -o output.pcd -f binary
-
-# Convert and show stats
-./scanforge input.pcd -o output.pcd -f ascii --stats
-```
-
-### Using as a Library
+ScanForge/
+├── app/                    # CLI application
+│   ├── main.cpp
+│   └── CMakeLists.txt
+├── src/                    # Core library
+│   ├── PCDLoader.hpp       # PCD file loader
+│   ├── LZFDecompressor.hpp # LZF decompression
+│   ├── PointCloudTypes.hpp # Point cloud data structures
+│   ├── tooling/
+│   │   └── Logger.hpp      # Logging utilities
+│   └── CMakeLists.txt
+├── tests/                  # Unit tests
+│   ├── CMakeLists.txt
+│   ├── data/               # Test data
+│   │   ├── bunny.pcd
+│   │   ├── milk_cartoon_all_small_clorox.pcd
+│   │   ├── sample_compressed.pcd
+│   │   └── sample.pcd
+│   └── UnitTests/
+│       ├── MainTest.cpp
+│       ├── PointCloudTypesTest.cpp
+│       └── LzfDecompressorTest.cpp
+├── cmake/                  # CMake modules
+│   ├── StandardProjectSettings.cmake
+│   ├── CompilerWarnings.cmake
+│   └── ...
+└── CMakeLists.txt         # Main CMake file
 
 ```cpp
-#include <scanforge/PCDLoader.hpp>
-#include <scanforge/PointCloudTypes.hpp>
+#include "src/PCDLoader.hpp"
+#include "src/PointCloudTypes.hpp"
 
 using namespace scanforge;
 
@@ -87,14 +86,12 @@ int main() {
     
     if (header.isValid()) {
         std::cout << "Loaded " << cloud.size() << " points\n";
-        
         // Get bounding box
         auto [min_pt, max_pt] = cloud.getBoundingBox();
         std::cout << "Bounding box: (" << min_pt.x << ", " << min_pt.y 
                   << ", " << min_pt.z << ") to (" << max_pt.x << ", " 
                   << max_pt.y << ", " << max_pt.z << ")\n";
     }
-    
     return 0;
 }
 ```
@@ -180,6 +177,7 @@ ScanForge/
 
 ### Core Classes
 
+
 #### `PointCloud<T>`
 Generic point cloud container supporting different point types.
 
@@ -190,7 +188,7 @@ public:
     std::vector<PointT> points;
     uint32_t width, height;
     bool is_dense;
-    
+
     void push_back(const PointT& point);
     size_t size() const;
     bool empty() const;
@@ -205,8 +203,8 @@ Loads PCD files with support for multiple formats.
 class PCDLoader {
 public:
     struct PCDHeader { /* ... */ };
-    
-    std::pair<PCDHeader, PointCloudXYZRGB> loadPCD(const std::string& filename);
+
+    std::pair<PCDHeader, PointCloud<PointXYZRGB>> loadPCD(const std::string& filename);
     bool isValidPCD(const std::string& filename);
 };
 ```
@@ -216,8 +214,8 @@ public:
 - `Point3D` - Basic 3D point (x, y, z)
 - `RGB` - Color information (r, g, b)
 - `PointXYZRGB` - Point with position and color
-- `PointCloudXYZ` - Point cloud with XYZ points
-- `PointCloudXYZRGB` - Point cloud with colored points
+- `PointCloud<Point3D>` - Point cloud with XYZ points
+- `PointCloud<PointXYZRGB>` - Point cloud with colored points
 
 ## Contributing
 
