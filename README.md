@@ -1,19 +1,22 @@
 # ScanForge
 
+![CI](https://github.com/your-username/ScanForge/workflows/CI/badge.svg)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
+![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
 
-ScanForge is a modern C++23 point cloud processing library designed for high-performance and cross-platform compatibility. It provides a clean, modern API for loading, processing, and converting point cloud data.
+ScanForge is point cloud data loading library. It provides a uniform interface for loading or saving point cloud data in various formats.
 
-## Features
+## Requirements
 
-- 🚀 **Modern C++23** - Leverages the latest C++ features for performance and safety
-- 🌐 **Cross-Platform** - Supports Windows, Linux, macOS, and Android
-- 📊 **Point Cloud Support** - Currently supports PCD format (ASCII, Binary, Binary Compressed)
-- 🛠️ **CLI Tool** - Command-line interface for point cloud analysis and conversion
-- 🧪 **Comprehensive Testing** - Full unit test coverage
-- 📚 **Well Documented** - Extensive documentation and examples
+- **CMake** 4.0 or higher (for full C++23 modules support)
+- **C++23** compatible compiler with modules support:
+  - GCC 14+ (for modules)
+  - Clang 17+ (for modules) 
+  - MSVC 2022 (17.8+, for modules)
+  - Android NDK r26+
+
 
 ## Supported Formats
 
@@ -25,12 +28,12 @@ ScanForge is a modern C++23 point cloud processing library designed for high-per
 
 ## Requirements
 
-- **CMake** 3.28 or higher
-- **C++23** compatible compiler:
-  - GCC 12+ 
-  - Clang 15+
-  - MSVC 2022 (17.0+)
-  - Android NDK r25+
+- **CMake** 4.0 or higher (for full C++23 modules support)
+- **C++23** compatible compiler with modules support:
+  - GCC 14+ (for modules)
+  - Clang 17+ (for modules) 
+  - **MSVC 2022 17.6+** (Visual Studio 2022 version 17.6 or later for C++23 support)
+  - Android NDK r26+
 
 ## Quick Start
 
@@ -52,32 +55,76 @@ cmake --build .
 
 # Run tests (optional)
 ctest --verbose
-
-# Install (optional)
-cmake --install .
 ```
 
-### Using the CLI Tool
+### Platform-Specific Build Instructions
 
+#### Windows (MSVC)
+```cmd
+# Ensure you have Visual Studio 2022 17.6+ installed
+# Open Developer Command Prompt for VS 2022
+
+git clone https://github.com/ambroise-leclerc/ScanForge.git
+cd ScanForge
+mkdir build && cd build
+
+# Configure with MSVC
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+
+# Build
+cmake --build .
+```
+
+#### Linux (GCC 14+)
 ```bash
-# Show file information
-./scanforge input.pcd --info
+# Install GCC 14+ first
+sudo apt update && sudo apt install -y gcc-14 g++-14
 
-# Show detailed statistics
-./scanforge input.pcd --stats --verbose
+git clone https://github.com/ambroise-leclerc/ScanForge.git
+cd ScanForge
+mkdir build && cd build
 
-# Convert format
-./scanforge input.pcd -o output.pcd -f binary
+# Configure with GCC 14
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
 
-# Convert and show stats
-./scanforge input.pcd -o output.pcd -f ascii --stats
+# Build
+cmake --build .
 ```
 
-### Using as a Library
+## Project Structure
+
+```
+ScanForge/
+├── app/                    # CLI application
+│   ├── main.cpp
+│   └── CMakeLists.txt
+├── src/                    # Core library
+│   ├── PCDLoader.hpp       # PCD file loader
+│   ├── LZFDecompressor.hpp # LZF decompression
+│   ├── PointCloudTypes.hpp # Point cloud data structures
+│   ├── tooling/
+│   │   └── Logger.hpp      # Logging utilities
+│   └── CMakeLists.txt
+├── tests/                  # Unit tests
+│   ├── CMakeLists.txt
+│   ├── data/               # Test data
+│   │   ├── bunny.pcd
+│   │   ├── milk_cartoon_all_small_clorox.pcd
+│   │   ├── sample_compressed.pcd
+│   │   └── sample.pcd
+│   └── UnitTests/
+│       ├── MainTest.cpp
+│       ├── PointCloudTypesTest.cpp
+│       └── LzfDecompressorTest.cpp
+├── cmake/                  # CMake modules
+│   ├── StandardProjectSettings.cmake
+│   ├── CompilerWarnings.cmake
+│   └── ...
+└── CMakeLists.txt         # Main CMake file
 
 ```cpp
-#include <scanforge/PCDLoader.hpp>
-#include <scanforge/PointCloudTypes.hpp>
+#include "src/PCDLoader.hpp"
+#include "src/PointCloudTypes.hpp"
 
 using namespace scanforge;
 
@@ -87,14 +134,12 @@ int main() {
     
     if (header.isValid()) {
         std::cout << "Loaded " << cloud.size() << " points\n";
-        
         // Get bounding box
         auto [min_pt, max_pt] = cloud.getBoundingBox();
         std::cout << "Bounding box: (" << min_pt.x << ", " << min_pt.y 
                   << ", " << min_pt.z << ") to (" << max_pt.x << ", " 
                   << max_pt.y << ", " << max_pt.z << ")\n";
     }
-    
     return 0;
 }
 ```
@@ -180,6 +225,7 @@ ScanForge/
 
 ### Core Classes
 
+
 #### `PointCloud<T>`
 Generic point cloud container supporting different point types.
 
@@ -190,7 +236,7 @@ public:
     std::vector<PointT> points;
     uint32_t width, height;
     bool is_dense;
-    
+
     void push_back(const PointT& point);
     size_t size() const;
     bool empty() const;
@@ -205,8 +251,8 @@ Loads PCD files with support for multiple formats.
 class PCDLoader {
 public:
     struct PCDHeader { /* ... */ };
-    
-    std::pair<PCDHeader, PointCloudXYZRGB> loadPCD(const std::string& filename);
+
+    std::pair<PCDHeader, PointCloud<PointXYZRGB>> loadPCD(const std::string& filename);
     bool isValidPCD(const std::string& filename);
 };
 ```
@@ -216,8 +262,8 @@ public:
 - `Point3D` - Basic 3D point (x, y, z)
 - `RGB` - Color information (r, g, b)
 - `PointXYZRGB` - Point with position and color
-- `PointCloudXYZ` - Point cloud with XYZ points
-- `PointCloudXYZRGB` - Point cloud with colored points
+- `PointCloud<Point3D>` - Point cloud with XYZ points
+- `PointCloud<PointXYZRGB>` - Point cloud with colored points
 
 ## Contributing
 

@@ -5,7 +5,7 @@
 
 #include <catch2/catch_all.hpp>
 #include "PCDLoader.hpp"
-#include "LZFDecompressor.hpp"
+#include "LZFCodec.hpp"
 #include "PointCloudTypes.hpp"
 #include "tooling/Logger.hpp"
 #include <filesystem>
@@ -45,7 +45,7 @@ TEST_CASE("ScanForge integration tests", "[integration]") {
 }
 
 TEST_CASE("Component integration", "[integration]") {
-    GIVEN("a mock PCD header and LZFDecompressor") {
+    GIVEN("a mock PCD header and LZFCodec") {
         PCDLoader::PCDHeader header;
         header.version = "0.7";
         header.fields = {"x", "y", "z"};
@@ -62,9 +62,9 @@ TEST_CASE("Component integration", "[integration]") {
                 REQUIRE(header.hasXYZ());
             }
         }
-        WHEN("decompressing test data with LZFDecompressor") {
+        WHEN("decompressing test data with LZFCodec") {
             std::vector<uint8_t> testData = {0x01, 0x02, 0x03};
-            auto result = LZFDecompressor::decompress(testData, 10);
+            auto result = LZFCodec::decompress(testData, 10);
             THEN("decompression runs (result may be empty for invalid data)") {
                 REQUIRE(result.empty());
             }

@@ -5,10 +5,13 @@
 
 #include <catch2/catch_all.hpp>
 #include "PointCloudTypes.hpp"
+
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <algorithm>
 
+using namespace std;
 using namespace scanforge;
 using Catch::Approx;
 
@@ -29,10 +32,10 @@ TEST_CASE("Point3D construction", "[PointCloudTypes]") {
         }
     }
     GIVEN("a Point3D with extreme values") {
-        Point3D point(std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest(), 0.0f);
+        Point3D point(numeric_limits<float>::max(), numeric_limits<float>::lowest(), 0.0f);
         THEN("the fields are set to the extremes") {
-            REQUIRE(point.x == std::numeric_limits<float>::max());
-            REQUIRE(point.y == std::numeric_limits<float>::lowest());
+            REQUIRE(point.x == numeric_limits<float>::max());
+            REQUIRE(point.y == numeric_limits<float>::lowest());
             REQUIRE(point.z == 0.0f);
         }
     }
@@ -133,7 +136,7 @@ TEST_CASE("Point3D magnitude calculations", "[PointCloudTypes]") {
     
     SECTION("3D Pythagorean magnitude") {
         Point3D point(1.0f, 2.0f, 2.0f);
-        float expected = std::sqrt(1.0f + 4.0f + 4.0f); // sqrt(9) = 3
+        float expected = sqrt(1.0f + 4.0f + 4.0f); // sqrt(9) = 3
         REQUIRE(point.magnitude() == Approx(expected));
     }
 }
@@ -350,7 +353,7 @@ TEST_CASE("PointCloud iterator support", "[PointCloudTypes]") {
         cloud.push_back(Point3D(2.0f, 2.0f, 3.0f));
         
         // Sort by x coordinate
-        std::sort(cloud.begin(), cloud.end(), 
+        sort(cloud.begin(), cloud.end(), 
                  [](const Point3D& a, const Point3D& b) { return a.x < b.x; });
         
         REQUIRE(cloud[0].x == 1.0f);
@@ -365,12 +368,12 @@ TEST_CASE("PointCloud realistic scenarios", "[PointCloudTypes]") {
         
         // Simulate a simple laser scan pattern (horizontal sweep)
         for (int i = 0; i < 360; ++i) {
-            float angle = static_cast<float>(i) * static_cast<float>(M_PI) / 180.0f; // Convert to radians
+            float angle = static_cast<float>(i) * numbers::pi_v<float> / 180.0f; // Convert to radians
             float distance = 10.0f; // 10 meter range
             
             Point3D point;
-            point.x = distance * std::cos(angle);
-            point.y = distance * std::sin(angle);
+            point.x = distance * cos(angle);
+            point.y = distance * sin(angle);
             point.z = 0.0f; // Ground level
             
             cloud.push_back(point);
@@ -403,7 +406,7 @@ TEST_CASE("PointCloud realistic scenarios", "[PointCloudTypes]") {
                 float centerY = static_cast<float>(height) / 2.0f;
                 float xFloat = static_cast<float>(x);
                 float yFloat = static_cast<float>(y);
-                float distFromCenter = std::sqrt((xFloat - centerX) * (xFloat - centerX) + 
+                float distFromCenter = sqrt((xFloat - centerX) * (xFloat - centerX) + 
                                                (yFloat - centerY) * (yFloat - centerY));
                 float depth = 1.0f + distFromCenter * 0.1f; // 1-5 meters
                 
