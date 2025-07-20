@@ -12,6 +12,11 @@
 #include <string>
 #include <vector>
 #include <tuple>
+#include <filesystem>
+#include <span>
+#include <ranges>
+#include <optional>
+#include <algorithm>
 
 namespace scanforge {
 using namespace tooling;
@@ -209,6 +214,72 @@ class PCDLoader {
   }
 
  private:
+  // Modern file I/O helper using RAII and C++23 features
+  template<typename FileType>
+  class FileHandle {
+  public:
+    FileHandle(const std::filesystem::path& path, std::ios_base::openmode mode = std::ios_base::in) 
+      : file_(path, mode), path_(path) {
+      if (!file_.is_open()) {
+        Log::error("Failed to open file: {}", path_.string());
+      }
+    }
+
+    ~FileHandle() = default;
+    FileHandle(const FileHandle&) = delete;
+    FileHandle& operator=(const FileHandle&) = delete;
+    FileHandle(FileHandle&&) = default;
+    FileHandle& operator=(FileHandle&&) = default;
+
+    bool is_open() const { return file_.is_open(); }
+    bool good() const { return file_.good(); }
+    
+    FileType& stream() { return file_; }
+    const FileType& stream() const { return file_; }
+    
+    const std::filesystem::path& path() const { return path_; }
+
+    // Modern read operations using spans
+    template<typename T>
+    bool read_binary(std::span<T> buffer) requires std::is_trivially_copyable_v<T> {
+      if constexpr (std::is_same_v<FileType, std::ifstream>) {
+        file_.read(reinterpret_cast<char*>(buffer.data()), buffer.size_bytes());
+        return file_.good();
+      } else {
+        return false;
+      }
+    }
+
+    // Modern write operations using spans  
+    template<typename T>
+    bool write_binary(std::span<const T> buffer) requires std::is_trivially_copyable_v<T> {
+      if constexpr (std::is_same_v<FileType, std::ofstream>) {
+        file_.write(reinterpret_cast<const char*>(buffer.data()), buffer.size_bytes());
+        return file_.good();
+      } else {
+        return false;
+      }
+    }
+
+    // Convenience methods for reading/writing single values
+    template<typename T>
+    bool read_value(T& value) requires std::is_trivially_copyable_v<T> {
+      return read_binary(std::span{&value, 1});
+    }
+
+    template<typename T>
+    bool write_value(const T& value) requires std::is_trivially_copyable_v<T> {
+      return write_binary(std::span{&value, 1});
+    }
+
+  private:
+    FileType file_;
+    std::filesystem::path path_;
+  };
+
+  using InputFile = FileHandle<std::ifstream>;
+  using OutputFile = FileHandle<std::ofstream>;
+
   bool parseHeader(std::ifstream& file, PCDHeader& header) {
     std::string line;
 
@@ -269,21 +340,25 @@ class PCDLoader {
   }
 
   bool loadBinaryCompressed(std::ifstream& file, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
-    // Read compressed size
+    // Read compressed size using modern approach
     uint32_t compressedSize, uncompressedSize;
-    file.read(reinterpret_cast<char*>(&compressedSize), sizeof(compressedSize));
-    file.read(reinterpret_cast<char*>(&uncompressedSize), sizeof(uncompressedSize));
-
-    if (file.fail()) {
-      scanforge::tooling::Log::error("Failed to read compression header");
+    
+    // Create temporary wrapper for legacy ifstream
+    auto readValue = [&file](auto& value) {
+      file.read(reinterpret_cast<char*>(&value), sizeof(value));
+      return file.good();
+    };
+    
+    if (!readValue(compressedSize) || !readValue(uncompressedSize)) {
+      Log::error("Failed to read compression header");
       return false;
     }
 
     std::vector<uint8_t> compressedData(compressedSize);
-    file.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+    file.read(reinterpret_cast<char*>(compressedData.data()), static_cast<std::streamsize>(compressedSize));
 
     if (file.fail()) {
-      scanforge::tooling::Log::error("Failed to read compressed data");
+      Log::error("Failed to read compressed data");
       return false;
     }
 
@@ -303,25 +378,26 @@ class PCDLoader {
   }
 
   bool loadBinary(std::ifstream& file, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
-    std::vector<char> binaryData;
-
-    // Calculate expected data size
-    size_t pointSize = 0;
-    for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += header.sizes[i] * header.counts[i];
-    }
+    // Calculate expected data size using ranges
+    auto pointSize = std::ranges::fold_left(
+      std::views::zip(header.sizes, header.counts),
+      0uz,
+      [](size_t sum, const auto& size_count) {
+        const auto& [size, count] = size_count;
+        return sum + size * count;
+      }
+    );
 
     size_t totalSize = pointSize * header.points;
-    binaryData.resize(totalSize);
+    std::vector<uint8_t> binaryData(totalSize);
 
-    file.read(binaryData.data(), static_cast<std::streamsize>(totalSize));
+    file.read(reinterpret_cast<char*>(binaryData.data()), static_cast<std::streamsize>(totalSize));
     if (file.gcount() != static_cast<std::streamsize>(totalSize)) {
-      scanforge::tooling::Log::error("Failed to read expected amount of binary data");
+      Log::error("Failed to read expected amount of binary data");
       return false;
     }
 
-    std::vector<uint8_t> data(binaryData.begin(), binaryData.end());
-    return parseBinaryData(data, header, pointCloud);
+    return parseBinaryData(binaryData, header, pointCloud);
   }
 
   bool loadASCII(std::ifstream& file, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
@@ -365,38 +441,50 @@ class PCDLoader {
   }
 
   bool parseBinaryData(const std::vector<uint8_t>& data, const PCDHeader& header, PointCloudXYZRGB& pointCloud) {
-    size_t xIdx = header.getFieldIndex("x");
-    size_t yIdx = header.getFieldIndex("y");
-    size_t zIdx = header.getFieldIndex("z");
-    size_t rgbIdx = header.getFieldIndex("rgb");
+    // Find field indices using modern approach
+    auto findFieldIndex = [&header](const std::string& name) -> std::optional<size_t> {
+      auto it = std::ranges::find(header.fields, name);
+      return it != header.fields.end() ? 
+        std::optional{static_cast<size_t>(std::distance(header.fields.begin(), it))} : std::nullopt;
+    };
 
-    if (xIdx == SIZE_MAX || yIdx == SIZE_MAX || zIdx == SIZE_MAX) {
-      scanforge::tooling::Log::error("Missing required XYZ fields");
+    auto xIdx = findFieldIndex("x");
+    auto yIdx = findFieldIndex("y"); 
+    auto zIdx = findFieldIndex("z");
+    auto rgbIdx = findFieldIndex("rgb");
+
+    if (!xIdx || !yIdx || !zIdx) {
+      Log::error("Missing required XYZ fields");
       return false;
     }
 
-    size_t pointSize = 0;
-    for (size_t i = 0; i < header.sizes.size(); ++i) {
-      pointSize += header.sizes[i] * header.counts[i];
-    }
+    // Calculate point size using ranges
+    auto pointSize = std::ranges::fold_left(
+      std::views::zip(header.sizes, header.counts),
+      0uz,
+      [](size_t sum, const auto& size_count) {
+        const auto& [size, count] = size_count;
+        return sum + size * count;
+      }
+    );
 
     for (uint32_t i = 0; i < header.points; ++i) {
       size_t offset = i * pointSize;
       if (offset + pointSize > data.size()) {
-        scanforge::tooling::Log::error("Data size mismatch");
+        Log::error("Data size mismatch");
         return false;
       }
 
-      // Extract position
+      // Extract position using modern approach with span safety
       Point3D position{0.0f, 0.0f, 0.0f};
       size_t fieldOffset = 0;
       
       for (size_t j = 0; j < header.fields.size(); ++j) {
-        if (j == xIdx) {
+        if (j == *xIdx) {
           std::memcpy(&position.x, &data[offset + fieldOffset], sizeof(float));
-        } else if (j == yIdx) {
+        } else if (j == *yIdx) {
           std::memcpy(&position.y, &data[offset + fieldOffset], sizeof(float));
-        } else if (j == zIdx) {
+        } else if (j == *zIdx) {
           std::memcpy(&position.z, &data[offset + fieldOffset], sizeof(float));
         }
         fieldOffset += header.sizes[j] * header.counts[j];
@@ -404,10 +492,10 @@ class PCDLoader {
 
       // Extract color
       RGB color(255, 255, 255);  // Default white
-      if (rgbIdx != SIZE_MAX) {
+      if (rgbIdx) {
         fieldOffset = 0;
-        for (size_t j = 0; j <= rgbIdx; ++j) {
-          if (j == rgbIdx) {
+        for (size_t j = 0; j <= *rgbIdx; ++j) {
+          if (j == *rgbIdx) {
             uint32_t rgbPacked;
             std::memcpy(&rgbPacked, &data[offset + fieldOffset], sizeof(uint32_t));
             color = RGB(rgbPacked);
