@@ -4,6 +4,7 @@
 #include "tooling/Logger.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -26,7 +27,8 @@ using namespace scanforge::tooling;
 std::string detectFileFormat(const std::string& filename) {
     fs::path filePath(filename);
     std::string extension = filePath.extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    std::transform(extension.begin(), extension.end(), extension.begin(), 
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     if (extension == ".pcd") {
         return "pcd";

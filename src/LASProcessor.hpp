@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -242,7 +243,14 @@ class LASProcessor {
         // Creation date (current date)
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
-        auto tm = *std::localtime(&time_t);
+        
+        // Use platform-specific safe time functions
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &time_t);
+#else
+        tm = *std::localtime(&time_t);
+#endif
         header.creationYear = static_cast<uint16_t>(tm.tm_year + 1900);
         header.creationDayOfYear = static_cast<uint16_t>(tm.tm_yday + 1);
 
