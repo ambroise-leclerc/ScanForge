@@ -36,6 +36,34 @@ if(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
   add_compile_options(-fcolor-diagnostics)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-fdiagnostics-color=always)
+elseif(MSVC)
+  # Enable colored diagnostics for MSVC (available in VS 2019 16.4+)
+  if(MSVC_VERSION GREATER_EQUAL 1924)
+    add_compile_options(/diagnostics:column)
+  endif()
+  
+  # MSVC-specific optimizations
+  add_compile_options(
+    # Release optimizations
+    $<$<CONFIG:Release>:/O2>      # Maximum optimization for speed
+    $<$<CONFIG:Release>:/Ob2>     # Inline function expansion
+    $<$<CONFIG:Release>:/Ot>      # Favor fast code over small code
+    $<$<CONFIG:Release>:/GL>      # Whole program optimization
+    
+    # Debug settings
+    $<$<CONFIG:Debug>:/ZI>        # Enable Edit and Continue debugging
+    $<$<CONFIG:Debug>:/Od>        # Disable optimization for debugging
+    
+    # General settings
+    /MP                           # Multi-processor compilation
+  )
+  
+  # Link-time optimizations for Release builds
+  add_link_options(
+    $<$<CONFIG:Release>:/LTCG>    # Link-time code generation
+    $<$<CONFIG:Release>:/OPT:REF> # Remove unreferenced functions/data
+    $<$<CONFIG:Release>:/OPT:ICF> # Identical COMDAT folding
+  )
 else()
   message(STATUS "No colored compiler diagnostic set for '${CMAKE_CXX_COMPILER_ID}' compiler.")
 endif()

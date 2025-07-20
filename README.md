@@ -25,11 +25,11 @@ ScanForge is point cloud data loading library. It provides a uniform interface f
 
 ## Requirements
 
-- **CMake** 3.28 or higher (4.0+ recommended for full C++23 modules support)
+- **CMake** 4.0 or higher (for full C++23 modules support)
 - **C++23** compatible compiler with modules support:
   - GCC 14+ (for modules)
-  - Clang 16+ (for modules) 
-  - MSVC 2022 (17.5+, for modules)
+  - Clang 17+ (for modules) 
+  - **MSVC 2022 17.6+** (Visual Studio 2022 version 17.6 or later for C++23 support)
   - Android NDK r26+
 
 ## Quick Start
@@ -52,7 +52,45 @@ cmake --build .
 
 # Run tests (optional)
 ctest --verbose
+```
 
+### Platform-Specific Build Instructions
+
+#### Windows (MSVC)
+```cmd
+# Ensure you have Visual Studio 2022 17.6+ installed
+# Open Developer Command Prompt for VS 2022
+
+git clone https://github.com/ambroise-leclerc/ScanForge.git
+cd ScanForge
+mkdir build && cd build
+
+# Configure with MSVC
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+
+# Build
+cmake --build .
+```
+
+#### Linux (GCC 14+)
+```bash
+# Install GCC 14+ first
+sudo apt update && sudo apt install -y gcc-14 g++-14
+
+git clone https://github.com/ambroise-leclerc/ScanForge.git
+cd ScanForge
+mkdir build && cd build
+
+# Configure with GCC 14
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+
+# Build
+cmake --build .
+```
+
+## Project Structure
+
+```
 ScanForge/
 ├── app/                    # CLI application
 │   ├── main.cpp

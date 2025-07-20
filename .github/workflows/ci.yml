@@ -24,6 +24,12 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 
+      - name: Set up MSVC (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -32,9 +38,25 @@ jobs:
       - name: Set up Ninja
         uses: seanmiddleditch/gha-setup-ninja@v4
 
-      - name: Configure CMake
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows-latest'
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+
+      - name: Configure CMake (Unix)
+        if: matrix.os != 'windows-latest'
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Display compiler info
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cl 2>&1 || echo "MSVC compiler version"
+          else
+            ${{ matrix.os == 'ubuntu-latest' && 'g++' || 'clang++' }} --version
+          fi
+        shell: bash
 
       - name: Build
         run: cmake --build build --config Release

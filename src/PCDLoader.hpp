@@ -284,7 +284,7 @@ class PCDLoader {
       }
 
       // Extract position
-      Point3D position;
+      Point3D position{0.0f, 0.0f, 0.0f};  // Initialize to zero to avoid uninitialized warning
       size_t fieldOffset = 0;
       
       for (int j = 0; j < static_cast<int>(header.fields.size()); ++j) {
